@@ -5,19 +5,17 @@ MODULES = type id m s syntax parser lexer typing asm kNormal alpha beta assoc in
 
 all : comp top
 
-comp : parser.mli parser.ml lexer.ml float.o
+comp : lexer_and_parser float.o
 	ocamlfind opt -c $(SOURCES)
 	ocamlfind opt -o comp float.o $(MODULES:=.cmx)
 
-top : parser.ml parser.mli lexer.ml float.o
+top : lexer_and_parser float.o 
 	ocamlfind ocamlc -c $(SOURCES)
-	ocamlmktop float.o -custom  -warn-error -31 -o top $(MODULES:=.cmo)
+	ocamlmktop -custom -warn-error -31 -o top float.o $(MODULES:=.cmo)
 
-parser.mli parser.ml : parser.mly
-	ocamlyacc $<
-
-lexer.ml : lexer.mll
-	ocamllex $<
+lexer_and_parser : 
+	ocamlyacc parser.mly
+	ocamllex lexer.mll
 
 float.o : float.c
 	$(CC) -Wall -c -o $@ $<
