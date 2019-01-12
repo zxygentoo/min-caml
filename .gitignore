@@ -23,7 +23,7 @@ test/*
 !test/*.ml
 
 # merlin
-.merlin
+# .merlin
 
 # exe
 comp
