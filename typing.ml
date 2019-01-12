@@ -19,7 +19,7 @@ let rec deref_typ = function
     t'
   | t -> t
 
-let rec deref_id_typ (x, t) = (x, deref_typ t)
+let deref_id_typ (x, t) = (x, deref_typ t)
 
 let rec deref_term = function
   | Not(e) -> Not(deref_term e)
@@ -42,7 +42,8 @@ let rec deref_term = function
            deref_term e2)
   | App(e, es) -> App(deref_term e, List.map deref_term es)
   | Tuple(es) -> Tuple(List.map deref_term es)
-  | LetTuple(xts, e1, e2) -> LetTuple(List.map deref_id_typ xts, deref_term e1, deref_term e2)
+  | LetTuple(xts, e1, e2) ->
+    LetTuple(List.map deref_id_typ xts, deref_term e1, deref_term e2)
   | Array(e1, e2) -> Array(deref_term e1, deref_term e2)
   | Get(e1, e2) -> Get(deref_term e1, deref_term e2)
   | Put(e1, e2, e3) -> Put(deref_term e1, deref_term e2, deref_term e3)
@@ -59,7 +60,8 @@ let rec occur r1 = function
 
 let rec unify t1 t2 =
   match t1, t2 with
-  | Type.Unit, Type.Unit | Type.Bool, Type.Bool | Type.Int, Type.Int | Type.Float, Type.Float -> ()
+  | Type.Unit, Type.Unit | Type.Bool, Type.Bool | Type.Int, Type.Int
+  | Type.Float, Type.Float -> ()
   | Type.Fun(t1s, t1'), Type.Fun(t2s, t2') ->
     (try List.iter2 unify t1s t2s
      with Invalid_argument(_) -> raise (Unify(t1, t2)));
