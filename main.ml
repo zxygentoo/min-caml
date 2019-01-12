@@ -1,64 +1,60 @@
-let limit = ref 1000
+let max_opt_iter = ref 1000
 
-let rec iter n e =
+let rec optimize_iter n ast =
   Format.eprintf "iteration %d@." n;
-  if n = 0 then e else
-    let e' = Elim.f (ConstFold.f (Inline.f (Assoc.f (Beta.f e)))) in
-    if e = e' then e else
-      iter (n - 1) e'
+  if n = 0 then ast else
+    let ast' = ast |> Beta.f |> Assoc.f |> Inline.f |> ConstFold.f |> Elim.f in
+    if ast = ast' then ast else optimize_iter (n - 1) ast'
 
-(* let lexbuf outchan l =
-   Id.counter := 0;
-   Typing.extenv := M.empty;
-   Emit.f outchan
-    (RegAlloc.f
-       (Simm.f
-          (Virtual.f
-             (Closure.f
-                (iter !limit
-                   (Alpha.f
-                      (KNormal.f
-                         (Typing.f
-                            (Parser.exp Lexer.token l)))))))))
-*)
-
-let lexbuf outchan l =
+let compile outchan buf =
   Id.counter := 0;
   Typing.extenv := M.empty;
-  Emit.f outchan
-    (
-      Parser.exp Lexer.token l |> Typing.f |> KNormal.f |> Alpha.f |> iter !limit |> Closure.f |> Virtual.f |> Simm.f |> RegAlloc.f
-    )
-(*     (RegAlloc.f
-       (Simm.f
-          (Virtual.f
-             (Closure.f
-                (iter !limit
-                   (Alpha.f
-                      (KNormal.f
-                         (Typing.f
-                            (Parser.exp Lexer.token l)))))))))
-*)
+  buf
+  |> Parser.exp Lexer.token
+  |> Typing.f
+  |> KNormal.f
+  |> Alpha.f
+  |> optimize_iter !max_opt_iter
+  |> Closure.f
+  |> Virtual.f
+  |> Simm.f
+  |> RegAlloc.f
+  |> Emit.f outchan
 
-let string s = lexbuf stdout (Lexing.from_string s)
+let comp_string str =
+  compile stdout (Lexing.from_string str)
 
-let file f =
-  let inchan = open_in (f ^ ".ml") in
-  let outchan = open_out (f ^ ".s") in
+let comp_file filename =
+  let inchan = open_in (filename ^ ".ml") in
+  let outchan = open_out (filename ^ ".s") in
   try
-    lexbuf outchan (Lexing.from_channel inchan);
+    compile outchan (Lexing.from_channel inchan);
     close_in inchan;
     close_out outchan;
-  with e -> (close_in inchan; close_out outchan; raise e)
+  with e ->
+    (close_in inchan; close_out outchan; raise e)
 
 let () =
   let files = ref [] in
   Arg.parse
-    [("-inline", Arg.Int(fun i -> Inline.threshold := i), "maximum size of functions inlined");
-     ("-iter", Arg.Int(fun i -> limit := i), "maximum number of optimizations iterated")]
-    (fun s -> files := !files @ [s])
-    ("Mitou Min-Caml Compiler (C) Eijiro Sumii\n" ^
-     Printf.sprintf "usage: %s [-inline m] [-iter n] ...filenames without \".ml\"..." Sys.argv.(0));
-  List.iter
-    (fun f -> ignore (file f))
-    !files
+    [
+      (
+        "-inline",
+        Arg.Int(fun n -> Inline.threshold := n),
+        "maximum size of functions to inline"
+      );
+      (
+        "-iter",
+        Arg.Int(fun n -> max_opt_iter := n),
+        "maximum number of optimization iterations"
+      )
+    ]
+    (fun file -> files := !files @ [file])
+    (
+      "Mitou Min-Caml Compiler (C) Eijiro Sumii\n" ^
+      Printf.sprintf
+        "usage: %s [-inline m] [-iter n] ...filenames without \".ml\"..."
+        Sys.argv.(0)
+    );
+
+  List.iter (fun file -> ignore (comp_file file)) !files

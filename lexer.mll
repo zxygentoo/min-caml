@@ -1,6 +1,6 @@
 {
-open Parser
-open Type
+  open Parser
+  open Type
 }
 
 let space = [' ' '\t' '\n' '\r']
@@ -10,89 +10,98 @@ let upper = ['A'-'Z']
 
 rule token = parse
 | space+
-    { token lexbuf }
+  { token lexbuf }
 | "(*"
-    { comment lexbuf;
-      token lexbuf }
+  {
+    comment lexbuf;
+    token lexbuf
+  }
 | '('
-    { LPAREN }
+  { LPAREN }
 | ')'
-    { RPAREN }
+  { RPAREN }
 | "true"
-    { BOOL(true) }
+  { BOOL(true) }
 | "false"
-    { BOOL(false) }
+  { BOOL(false) }
 | "not"
-    { NOT }
+  { NOT }
 | digit+
-    { INT(int_of_string (Lexing.lexeme lexbuf)) }
+  { INT(int_of_string (Lexing.lexeme lexbuf)) }
 | digit+ ('.' digit*)? (['e' 'E'] ['+' '-']? digit+)?
-    { FLOAT(float_of_string (Lexing.lexeme lexbuf)) }
+  { FLOAT(float_of_string (Lexing.lexeme lexbuf)) }
 | '-'
-    { MINUS }
+  { MINUS }
 | '+'
-    { PLUS }
+  { PLUS }
 | "-."
-    { MINUS_DOT }
+  { MINUS_DOT }
 | "+."
-    { PLUS_DOT }
+  { PLUS_DOT }
 | "*."
-    { AST_DOT }
+  { AST_DOT }
 | "/."
-    { SLASH_DOT }
+  { SLASH_DOT }
 | '='
-    { EQUAL }
+  { EQUAL }
 | "<>"
-    { LESS_GREATER }
+  { LESS_GREATER }
 | "<="
-    { LESS_EQUAL }
+  { LESS_EQUAL }
 | ">="
-    { GREATER_EQUAL }
+  { GREATER_EQUAL }
 | '<'
-    { LESS }
+  { LESS }
 | '>'
-    { GREATER }
+  { GREATER }
 | "if"
-    { IF }
+  { IF }
 | "then"
-    { THEN }
+  { THEN }
 | "else"
-    { ELSE }
+  { ELSE }
 | "let"
-    { LET }
+  { LET }
 | "in"
-    { IN }
+  { IN }
 | "rec"
-    { REC }
+  { REC }
 | ','
-    { COMMA }
+  { COMMA }
 | '_'
-    { IDENT(Id.gentmp Type.Unit) }
+  { IDENT(Id.gentmp Type.Unit) }
 | "Array.create" | "Array.make" (* [XX] ad hoc *)
-    { ARRAY_CREATE }
+  { ARRAY_CREATE }
 | '.'
-    { DOT }
+  { DOT }
 | "<-"
-    { LESS_MINUS }
+  { LESS_MINUS }
 | ';'
-    { SEMICOLON }
+  { SEMICOLON }
 | eof
-    { EOF }
+  { EOF }
 | lower (digit|lower|upper|'_')*
-    { IDENT(Lexing.lexeme lexbuf) }
+  { IDENT(Lexing.lexeme lexbuf) }
 | _
-    { failwith
-        (Printf.sprintf "unknown token %s near characters %d-%d"
-           (Lexing.lexeme lexbuf)
-           (Lexing.lexeme_start lexbuf)
-           (Lexing.lexeme_end lexbuf)) }
+  {
+    failwith
+      (
+        Printf.sprintf "unknown token %s near characters %d-%d"
+          (Lexing.lexeme lexbuf)
+          (Lexing.lexeme_start lexbuf)
+          (Lexing.lexeme_end lexbuf)
+      )
+  }
+
 and comment = parse
 | "*)"
-    { () }
+  { () }
 | "(*"
-    { comment lexbuf;
-      comment lexbuf }
+  {
+    comment lexbuf;
+    comment lexbuf
+  }
 | eof
-    { Format.eprintf "warning: unterminated comment@." }
+  { Format.eprintf "warning: unterminated comment@." }
 | _
-    { comment lexbuf }
+  { comment lexbuf }
