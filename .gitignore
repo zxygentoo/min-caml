@@ -22,6 +22,9 @@ min-caml.top
 test/*
 !test/*.ml
 
-# build working directory
-._bcdi
-._d
+# merlin
+.merlin
+
+# exe
+comp
+top
