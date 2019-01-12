@@ -7,10 +7,10 @@ let rec iter n e =
     if e = e' then e else
       iter (n - 1) e'
 
-let lexbuf outchan l =
-  Id.counter := 0;
-  Typing.extenv := M.empty;
-  Emit.f outchan
+(* let lexbuf outchan l =
+   Id.counter := 0;
+   Typing.extenv := M.empty;
+   Emit.f outchan
     (RegAlloc.f
        (Simm.f
           (Virtual.f
@@ -20,6 +20,25 @@ let lexbuf outchan l =
                       (KNormal.f
                          (Typing.f
                             (Parser.exp Lexer.token l)))))))))
+*)
+
+let lexbuf outchan l =
+  Id.counter := 0;
+  Typing.extenv := M.empty;
+  Emit.f outchan
+    (
+      Parser.exp Lexer.token l |> Typing.f |> KNormal.f |> Alpha.f |> iter !limit |> Closure.f |> Virtual.f |> Simm.f |> RegAlloc.f
+    )
+(*     (RegAlloc.f
+       (Simm.f
+          (Virtual.f
+             (Closure.f
+                (iter !limit
+                   (Alpha.f
+                      (KNormal.f
+                         (Typing.f
+                            (Parser.exp Lexer.token l)))))))))
+*)
 
 let string s = lexbuf stdout (Lexing.from_string s)
 
