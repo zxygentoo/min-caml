@@ -24,4 +24,4 @@ test/*
 
 # build working directory
 ._bcdi
-._d/
+._d

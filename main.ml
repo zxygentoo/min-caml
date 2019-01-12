@@ -1,13 +1,13 @@
 let limit = ref 1000
 
-let rec iter n e = (* 最適化処理をくりかえす (caml2html: main_iter) *)
+let rec iter n e =
   Format.eprintf "iteration %d@." n;
   if n = 0 then e else
-  let e' = Elim.f (ConstFold.f (Inline.f (Assoc.f (Beta.f e)))) in
-  if e = e' then e else
-  iter (n - 1) e'
+    let e' = Elim.f (ConstFold.f (Inline.f (Assoc.f (Beta.f e)))) in
+    if e = e' then e else
+      iter (n - 1) e'
 
-let lexbuf outchan l = (* バッファをコンパイルしてチャンネルへ出力する (caml2html: main_lexbuf) *)
+let lexbuf outchan l =
   Id.counter := 0;
   Typing.extenv := M.empty;
   Emit.f outchan
@@ -21,9 +21,9 @@ let lexbuf outchan l = (* バッファをコンパイルしてチャンネルへ出力する (caml2htm
                          (Typing.f
                             (Parser.exp Lexer.token l)))))))))
 
-let string s = lexbuf stdout (Lexing.from_string s) (* 文字列をコンパイルして標準出力に表示する (caml2html: main_string) *)
+let string s = lexbuf stdout (Lexing.from_string s)
 
-let file f = (* ファイルをコンパイルしてファイルに出力する (caml2html: main_file) *)
+let file f =
   let inchan = open_in (f ^ ".ml") in
   let outchan = open_out (f ^ ".s") in
   try
@@ -32,7 +32,7 @@ let file f = (* ファイルをコンパイルしてファイルに出力する (caml2html: main_file
     close_out outchan;
   with e -> (close_in inchan; close_out outchan; raise e)
 
-let () = (* ここからコンパイラの実行が開始される (caml2html: main_entry) *)
+let () =
   let files = ref [] in
   Arg.parse
     [("-inline", Arg.Int(fun i -> Inline.threshold := i), "maximum size of functions inlined");
