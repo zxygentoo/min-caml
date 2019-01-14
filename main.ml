@@ -3,8 +3,14 @@ let max_opt_iter = ref 1000
 let rec optimize_iter n ast =
   Format.eprintf "iteration %d@." n;
   if n = 0 then ast else
-    let ast' = ast |> Beta.f |> Assoc.f |> Inline.f |> Constfold.f |> Elim.f in
-    if ast = ast' then ast else optimize_iter (n - 1) ast'
+    let ast_new = ast
+                  |> Beta.f
+                  |> Assoc.f
+                  |> Inline.f
+                  |> Constfold.f
+                  |> Elim.f in
+    if ast = ast_new then ast
+    else optimize_iter (n - 1) ast_new
 
 let compile outchan buf =
   Id.counter := 0;

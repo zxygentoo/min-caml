@@ -1,6 +1,8 @@
 type t = string
 type l = L of string
 
+let compare = Pervasives.compare
+
 let rec pp_list = function
   | [] -> ""
   | [x] -> x
