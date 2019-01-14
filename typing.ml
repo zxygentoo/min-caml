@@ -230,7 +230,7 @@ let rec g env e =
       M.find x !extenv
 
     | Var(x) ->
-      Format.eprintf "==> free variable %s assumed as external@." x ;
+      Format.eprintf "==> free variable `%s` assumed as external@." x ;
       let t = Type.gentyp () in
       extenv := M.add x t !extenv ;
       t
@@ -272,14 +272,13 @@ let rec g env e =
     raise (Error(deref_term e, deref_typ t1, deref_typ t2))
 
 let infer e =
-  extenv := M.empty  ;
-  (
-    match deref_typ (g M.empty e) with
-    | Type.Unit ->
-      ()
-    | _ ->
-      Format.eprintf "==> [warning] final result does not have type unit@."
+  extenv := M.empty ;
+  (* 
+  (match deref_typ (g M.empty e) with
+   | Type.Unit -> ()
+   | _ -> Format.eprintf "warning: final result does not have type unit@."
   ) ;
+ *)
   (
     try unify Type.Unit (g M.empty e)
     with Unify _ ->
