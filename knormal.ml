@@ -1,5 +1,3 @@
-(* give names to intermediate values (K-normalization) *)
-
 module Stx = Syntax
 
 type t =
@@ -26,7 +24,6 @@ type t =
   | Put of Id.t * Id.t * Id.t
   | ExtArray of Id.t
   | ExtFunApp of Id.t * Id.t list
-
 and fundef = {
   name : Id.t * Type.t;
   args : (Id.t * Type.t) list;
@@ -51,21 +48,18 @@ let rec gather_ids = function
   | Let((x, _t), e1, e2) ->
     S.union (gather_ids e1) (S.remove x (gather_ids e2))
 
-  | Var(x) ->
-    S.singleton x
+  | Var(x) -> S.singleton x
 
   | LetRec({ name = (x, _t); args; body }, e2) ->
     let zs = S.diff (gather_ids body) (S.of_list (List.map fst args)) in
     S.diff (S.union zs (gather_ids e2)) (S.singleton x)
 
-  | App(x, ys) ->
-    S.of_list (x :: ys)
+  | App(x, ys) -> S.of_list (x :: ys)
 
   | Tuple(xs) | ExtFunApp(_, xs) ->
     S.of_list xs
 
-  | Put(x, y, z) ->
-    S.of_list [x; y; z]
+  | Put(x, y, z) -> S.of_list [x; y; z]
 
   | LetTuple(xs, y, e) ->
     S.add y (S.diff (gather_ids e) (S.of_list (List.map fst xs)))
@@ -73,9 +67,7 @@ let rec gather_ids = function
 
 let convert_let (exp, ty) k =
   match exp with
-  | Var(x) ->
-    k x
-
+  | Var(x) -> k x
   | _ ->
     let x = Id.gentmp ty in
     let exp2, ty2 = k x in
@@ -83,24 +75,17 @@ let convert_let (exp, ty) k =
 
 
 let rec g env = function
-  | Stx.Unit ->
-    Unit, Type.Unit
+  | Stx.Unit -> Unit, Type.Unit
 
-  | Stx.Bool(b) ->
-    Int(if b then 1 else 0), Type.Int
+  | Stx.Bool(b) -> Int(if b then 1 else 0), Type.Int
 
-  | Stx.Int(i) ->
-    Int(i), Type.Int
+  | Stx.Int(i) -> Int(i), Type.Int
 
-  | Stx.Float(d) ->
-    Float(d), Type.Float
+  | Stx.Float(d) -> Float(d), Type.Float
 
-  | Stx.Not(e) ->
-    g env (Stx.If(e, Stx.Bool(false), Stx.Bool(true)))
+  | Stx.Not(e) -> g env (Stx.If(e, Stx.Bool(false), Stx.Bool(true)))
 
-  | Stx.Neg(e) ->
-    convert_let
-      (g env e) (fun x -> Neg(x), Type.Int)
+  | Stx.Neg(e) -> convert_let (g env e) (fun x -> Neg(x), Type.Int)
 
   | Stx.Add(e1, e2) ->
     convert_let
@@ -140,8 +125,7 @@ let rec g env = function
   | Stx.Eq _ | Stx.LE _ as cmp ->
     g env (Stx.If(cmp, Stx.Bool(true), Stx.Bool(false)))
 
-  | Stx.If(Stx.Not(e1), e2, e3) ->
-    g env (Stx.If(e1, e3, e2))
+  | Stx.If(Stx.Not(e1), e2, e3) -> g env (Stx.If(e1, e3, e2))
 
   | Stx.If(Stx.Eq(e1, e2), e3, e4) ->
     convert_let
@@ -169,8 +153,7 @@ let rec g env = function
     let e2', t2 = g (M.add x t env) e2 in
     Let((x, t), e1', e2'), t2
 
-  | Stx.Var(x) when M.mem x env ->
-    Var(x), M.find x env
+  | Stx.Var(x) when M.mem x env -> Var(x), M.find x env
 
   | Stx.Var(x) ->
     (match M.find x !Typing.extenv with
