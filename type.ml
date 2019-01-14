@@ -8,4 +8,5 @@ type t =
   | Array of t
   | Var of t option ref
 
-let gentyp () = Var(ref None)
+let gentyp () =
+  Var(ref None)
