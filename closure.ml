@@ -53,24 +53,24 @@ let rec fv = function
 let toplevel : fundef list ref = ref []
 
 let rec g env known = function
-  | KNormal.Unit -> Unit
-  | KNormal.Int(i) -> Int(i)
-  | KNormal.Float(d) -> Float(d)
-  | KNormal.Neg(x) -> Neg(x)
-  | KNormal.Add(x, y) -> Add(x, y)
-  | KNormal.Sub(x, y) -> Sub(x, y)
-  | KNormal.FNeg(x) -> FNeg(x)
-  | KNormal.FAdd(x, y) -> FAdd(x, y)
-  | KNormal.FSub(x, y) -> FSub(x, y)
-  | KNormal.FMul(x, y) -> FMul(x, y)
-  | KNormal.FDiv(x, y) -> FDiv(x, y)
-  | KNormal.IfEq(x, y, e1, e2) -> IfEq(x, y, g env known e1, g env known e2)
-  | KNormal.IfLE(x, y, e1, e2) -> IfLE(x, y, g env known e1, g env known e2)
-  | KNormal.Let((x, t), e1, e2) ->
+  | Knormal.Unit -> Unit
+  | Knormal.Int(i) -> Int(i)
+  | Knormal.Float(d) -> Float(d)
+  | Knormal.Neg(x) -> Neg(x)
+  | Knormal.Add(x, y) -> Add(x, y)
+  | Knormal.Sub(x, y) -> Sub(x, y)
+  | Knormal.FNeg(x) -> FNeg(x)
+  | Knormal.FAdd(x, y) -> FAdd(x, y)
+  | Knormal.FSub(x, y) -> FSub(x, y)
+  | Knormal.FMul(x, y) -> FMul(x, y)
+  | Knormal.FDiv(x, y) -> FDiv(x, y)
+  | Knormal.IfEq(x, y, e1, e2) -> IfEq(x, y, g env known e1, g env known e2)
+  | Knormal.IfLE(x, y, e1, e2) -> IfLE(x, y, g env known e1, g env known e2)
+  | Knormal.Let((x, t), e1, e2) ->
     Let((x, t), g env known e1, g (M.add x t env) known e2)
-  | KNormal.Var(x) -> Var(x)
-  | KNormal.LetRec(
-      { KNormal.name = (x, t); KNormal.args = yts; KNormal.body = e1 }, e2
+  | Knormal.Var(x) -> Var(x)
+  | Knormal.LetRec(
+      { Knormal.name = (x, t); Knormal.args = yts; Knormal.body = e1 }, e2
     ) ->
     let toplevel_backup = !toplevel in
     let env' = M.add x t env in
@@ -97,17 +97,17 @@ let rec g env known = function
       MakeCls((x, t), { entry = Id.L(x); actual_fv = zs }, e2')
     else
       (Format.eprintf "eliminating closure(s) %s@." x; e2')
-  | KNormal.App(x, ys) when S.mem x known ->
+  | Knormal.App(x, ys) when S.mem x known ->
     Format.eprintf "directly applying %s@." x;
     AppDir(Id.L(x), ys)
-  | KNormal.App(f, xs) -> AppCls(f, xs)
-  | KNormal.Tuple(xs) -> Tuple(xs)
-  | KNormal.LetTuple(xts, y, e) ->
+  | Knormal.App(f, xs) -> AppCls(f, xs)
+  | Knormal.Tuple(xs) -> Tuple(xs)
+  | Knormal.LetTuple(xts, y, e) ->
     LetTuple(xts, y, g (M.add_list xts env) known e)
-  | KNormal.Get(x, y) -> Get(x, y)
-  | KNormal.Put(x, y, z) -> Put(x, y, z)
-  | KNormal.ExtArray(x) -> ExtArray(Id.L(x))
-  | KNormal.ExtFunApp(x, ys) -> AppDir(Id.L("min_caml_" ^ x), ys)
+  | Knormal.Get(x, y) -> Get(x, y)
+  | Knormal.Put(x, y, z) -> Put(x, y, z)
+  | Knormal.ExtArray(x) -> ExtArray(Id.L(x))
+  | Knormal.ExtFunApp(x, ys) -> AppDir(Id.L("min_caml_" ^ x), ys)
 
 let f e =
   toplevel := [];

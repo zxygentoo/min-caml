@@ -3,7 +3,7 @@ let max_opt_iter = ref 1000
 let rec optimize_iter n ast =
   Format.eprintf "iteration %d@." n;
   if n = 0 then ast else
-    let ast' = ast |> Beta.f |> Assoc.f |> Inline.f |> ConstFold.f |> Elim.f in
+    let ast' = ast |> Beta.f |> Assoc.f |> Inline.f |> Constfold.f |> Elim.f in
     if ast = ast' then ast else optimize_iter (n - 1) ast'
 
 let compile outchan buf =
@@ -12,13 +12,13 @@ let compile outchan buf =
   buf
   |> Parser.exp Lexer.token
   |> Typing.f
-  |> KNormal.f
+  |> Knormal.f
   |> Alpha.f
   |> optimize_iter !max_opt_iter
   |> Closure.f
   |> Virtual.f
   |> Simm.f
-  |> RegAlloc.f
+  |> Regalloc.f
   |> Emit.f outchan
 
 let comp_string str =

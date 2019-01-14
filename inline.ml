@@ -1,4 +1,4 @@
-open KNormal
+open Knormal
 
 let threshold = ref 0
 

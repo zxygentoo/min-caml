@@ -1,7 +1,7 @@
-SOURCES = type.ml id.ml m.ml s.ml syntax.ml parser.mli parser.ml lexer.ml typing.mli typing.ml asm.mli asm.ml kNormal.mli kNormal.ml \
-		alpha.mli alpha.ml beta.mli beta.ml assoc.mli assoc.ml inline.mli inline.ml constFold.mli constFold.ml elim.mli elim.ml \
-		closure.mli closure.ml virtual.mli virtual.ml simm.mli simm.ml regAlloc.mli regAlloc.ml emit.mli emit.ml main.mli main.ml
-MODULES = type id m s syntax parser lexer typing asm kNormal alpha beta assoc inline constFold elim closure virtual simm regAlloc emit main
+SOURCES = type.ml id.ml m.ml s.ml syntax.ml parser.mli parser.ml lexer.ml typing.mli typing.ml asm.mli asm.ml knormal.mli knormal.ml \
+		alpha.mli alpha.ml beta.mli beta.ml assoc.mli assoc.ml inline.mli inline.ml constfold.mli constfold.ml elim.mli elim.ml \
+		closure.mli closure.ml virtual.mli virtual.ml simm.mli simm.ml regalloc.mli regalloc.ml emit.mli emit.ml main.mli main.ml
+MODULES = type id m s syntax parser lexer typing asm knormal alpha beta assoc inline constfold elim closure virtual simm regalloc emit main
 
 all : comp top
 
