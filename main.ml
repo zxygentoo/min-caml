@@ -1,15 +1,18 @@
 let max_opt_iter = ref 1000
 
 let rec optimize_iter n ast =
-  Format.eprintf "iteration %d@." n;
-  if n = 0 then ast else
+  Format.eprintf "==> iteration: %d@." n;
+  if n = 0 then
+    ast
+  else
     let ast_new = ast
                   |> Beta.f
                   |> Assoc.f
                   |> Inline.f
                   |> Constfold.f
-                  |> Elim.f in
-    if ast = ast_new then ast
+                  |> Elim.f
+    in if ast = ast_new
+    then ast
     else optimize_iter (n - 1) ast_new
 
 let compile outchan buf =
@@ -17,8 +20,8 @@ let compile outchan buf =
   Typing.extenv := M.empty;
   buf
   |> Parser.exp Lexer.token
-  |> Typing.f
-  |> Knormal.f
+  |> Typing.infer
+  |> Knormal.normalize
   |> Alpha.f
   |> optimize_iter !max_opt_iter
   |> Closure.f
@@ -27,10 +30,10 @@ let compile outchan buf =
   |> Regalloc.f
   |> Emit.f outchan
 
-let comp_string str =
+let compile_string str =
   compile stdout (Lexing.from_string str)
 
-let comp_file filename =
+let compile_file filename =
   let inchan = open_in (filename ^ ".ml") in
   let outchan = open_out (filename ^ ".s") in
   try
@@ -63,4 +66,4 @@ let () =
         Sys.argv.(0)
     );
 
-  List.iter (fun file -> ignore (comp_file file)) !files
+  List.iter (fun file -> ignore (compile_file file)) !files

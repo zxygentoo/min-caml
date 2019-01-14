@@ -25,4 +25,4 @@ type t =
 and fundef = { name : Id.t * Type.t; args : (Id.t * Type.t) list; body : t }
 
 val gather_ids : t -> S.t
-val f : Syntax.t -> t
+val normalize : Syntax.t -> t

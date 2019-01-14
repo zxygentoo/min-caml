@@ -43,4 +43,5 @@ let rec f = function
     else
       (Format.eprintf "eliminating variables %s@." (Id.pp_list xs); e')
 
-  | e -> e
+  | e ->
+    e

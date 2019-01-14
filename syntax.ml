@@ -1,4 +1,4 @@
-type t = (* MinCamlの構文を表現するデータ型 (caml2html: syntax_t) *)
+type t =
   | Unit
   | Bool of bool
   | Int of int
@@ -24,4 +24,9 @@ type t = (* MinCamlの構文を表現するデータ型 (caml2html: syntax_t) *)
   | Array of t * t
   | Get of t * t
   | Put of t * t * t
-and fundef = { name : Id.t * Type.t; args : (Id.t * Type.t) list; body : t }
+
+and fundef = {
+  name : Id.t * Type.t;
+  args : (Id.t * Type.t) list;
+  body : t
+}

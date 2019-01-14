@@ -1,3 +1,3 @@
 val max_opt_iter : int ref
-val comp_string : string -> unit
-val comp_file : string -> unit
+val compile_string : string -> unit
+val compile_file : string -> unit

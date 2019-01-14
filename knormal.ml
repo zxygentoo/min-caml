@@ -1,5 +1,7 @@
 (* give names to intermediate values (K-normalization) *)
 
+module Stx = Syntax
+
 type t =
   | Unit
   | Int of int
@@ -71,7 +73,9 @@ let rec gather_ids = function
 
 let convert_let (exp, ty) k =
   match exp with
-  | Var(x) -> k x
+  | Var(x) ->
+    k x
+
   | _ ->
     let x = Id.gentmp ty in
     let exp2, ty2 = k x in
@@ -79,67 +83,67 @@ let convert_let (exp, ty) k =
 
 
 let rec g env = function
-  | Syntax.Unit ->
+  | Stx.Unit ->
     Unit, Type.Unit
 
-  | Syntax.Bool(b) ->
+  | Stx.Bool(b) ->
     Int(if b then 1 else 0), Type.Int
 
-  | Syntax.Int(i) ->
+  | Stx.Int(i) ->
     Int(i), Type.Int
 
-  | Syntax.Float(d) ->
+  | Stx.Float(d) ->
     Float(d), Type.Float
 
-  | Syntax.Not(e) ->
-    g env (Syntax.If(e, Syntax.Bool(false), Syntax.Bool(true)))
+  | Stx.Not(e) ->
+    g env (Stx.If(e, Stx.Bool(false), Stx.Bool(true)))
 
-  | Syntax.Neg(e) ->
+  | Stx.Neg(e) ->
     convert_let
       (g env e) (fun x -> Neg(x), Type.Int)
 
-  | Syntax.Add(e1, e2) ->
+  | Stx.Add(e1, e2) ->
     convert_let
       (g env e1)
       (fun x -> convert_let (g env e2) (fun y -> Add(x, y), Type.Int))
 
-  | Syntax.Sub(e1, e2) ->
+  | Stx.Sub(e1, e2) ->
     convert_let
       (g env e1)
       (fun x -> convert_let (g env e2) (fun y -> Sub(x, y), Type.Int))
 
-  | Syntax.FNeg(e) ->
+  | Stx.FNeg(e) ->
     convert_let
       (g env e)
       (fun x -> FNeg(x), Type.Float)
 
-  | Syntax.FAdd(e1, e2) ->
+  | Stx.FAdd(e1, e2) ->
     convert_let
       (g env e1)
       (fun x -> convert_let (g env e2) (fun y -> FAdd(x, y), Type.Float))
 
-  | Syntax.FSub(e1, e2) ->
+  | Stx.FSub(e1, e2) ->
     convert_let
       (g env e1)
       (fun x -> convert_let (g env e2) (fun y -> FSub(x, y), Type.Float))
 
-  | Syntax.FMul(e1, e2) ->
+  | Stx.FMul(e1, e2) ->
     convert_let
       (g env e1)
       (fun x -> convert_let (g env e2) (fun y -> FMul(x, y), Type.Float))
 
-  | Syntax.FDiv(e1, e2) ->
+  | Stx.FDiv(e1, e2) ->
     convert_let
       (g env e1)
       (fun x -> convert_let (g env e2) (fun y -> FDiv(x, y), Type.Float))
 
-  | Syntax.Eq _ | Syntax.LE _ as cmp ->
-    g env (Syntax.If(cmp, Syntax.Bool(true), Syntax.Bool(false)))
+  | Stx.Eq _ | Stx.LE _ as cmp ->
+    g env (Stx.If(cmp, Stx.Bool(true), Stx.Bool(false)))
 
-  | Syntax.If(Syntax.Not(e1), e2, e3) ->
-    g env (Syntax.If(e1, e3, e2))
+  | Stx.If(Stx.Not(e1), e2, e3) ->
+    g env (Stx.If(e1, e3, e2))
 
-  | Syntax.If(Syntax.Eq(e1, e2), e3, e4) ->
+  | Stx.If(Stx.Eq(e1, e2), e3, e4) ->
     convert_let
       (g env e1)
       (fun x -> convert_let (g env e2)
@@ -148,7 +152,7 @@ let rec g env = function
              let e4', _t4 = g env e4 in
              IfEq(x, y, e3', e4'), t3))
 
-  | Syntax.If(Syntax.LE(e1, e2), e3, e4) ->
+  | Stx.If(Stx.LE(e1, e2), e3, e4) ->
     convert_let
       (g env e1)
       (fun x -> convert_let (g env e2)
@@ -157,58 +161,62 @@ let rec g env = function
              let e4', _t4 = g env e4 in
              IfLE(x, y, e3', e4'), t3))
 
-  | Syntax.If(e1, e2, e3) ->
-    g env (Syntax.If(Syntax.Eq(e1, Syntax.Bool(false)), e3, e2))
+  | Stx.If(e1, e2, e3) ->
+    g env (Stx.If(Stx.Eq(e1, Stx.Bool(false)), e3, e2))
 
-  | Syntax.Let((x, t), e1, e2) ->
+  | Stx.Let((x, t), e1, e2) ->
     let e1', _t1 = g env e1 in
     let e2', t2 = g (M.add x t env) e2 in
     Let((x, t), e1', e2'), t2
 
-  | Syntax.Var(x) when M.mem x env ->
+  | Stx.Var(x) when M.mem x env ->
     Var(x), M.find x env
 
-  | Syntax.Var(x) ->
+  | Stx.Var(x) ->
     (match M.find x !Typing.extenv with
-     | Type.Array(_) as t -> ExtArray x, t
-     | _ -> failwith (
-         Printf.sprintf "external variable %s does not have an array type" x)
-    )
+     | Type.Array(_) as t ->
+       ExtArray x, t
+     | _ -> 
+       failwith (
+         Printf.sprintf "external variable %s does not have an array type" x))
 
-  | Syntax.LetRec(
-      { Syntax.name = (x, t); Syntax.args = yts; Syntax.body = e1 }, e2
-    ) ->
+  | Stx.LetRec({ Stx.name = (x, t); Stx.args = args; Stx.body = e1 }, e2) ->
     let env' = M.add x t env in
     let e2', t2 = g env' e2 in
-    let e1', _t1 = g (M.add_list yts env') e1 in
-    LetRec({ name = (x, t); args = yts; body = e1' }, e2'), t2
+    let e1', _t1 = g (M.add_list args env') e1 in
+    LetRec({ name = (x, t); args = args; body = e1' }, e2'), t2
 
-  | Syntax.App(Syntax.Var(f), e2s) when not (M.mem f env) ->
+  | Stx.App(Stx.Var(f), e2s) when not (M.mem f env) ->
     (match M.find f !Typing.extenv with
      | Type.Fun(_, t) ->
-       let rec bind xs = function (* "xs" are identifiers for the arguments *)
-         | [] -> ExtFunApp(f, xs), t
+       let rec bind xs = function
+         (* "xs" are identifiers for the arguments *)
+         | [] ->
+           ExtFunApp(f, xs), t
          | e2 :: e2s ->
            convert_let (g env e2)
              (fun x -> bind (xs @ [x]) e2s) in
-       bind [] e2s (* left-to-right evaluation *)
+       (* left-to-right evaluation *)
+       bind [] e2s
      | _ -> assert false)
 
-  | Syntax.App(e1, e2s) ->
+  | Stx.App(e1, e2s) ->
     (match g env e1 with
      | _, Type.Fun(_, t) as g_e1 ->
        convert_let g_e1
          (fun f ->
             let rec bind xs = function
               (* "xs" are identifiers for the arguments *)
-              | [] -> App(f, xs), t
+              | [] ->
+                App(f, xs), t
               | e2 :: e2s ->
                 convert_let (g env e2)
                   (fun x -> bind (xs @ [x]) e2s) in
-            bind [] e2s) (* left-to-right evaluation *)
+            (* left-to-right evaluation *)
+            bind [] e2s)
      | _ -> assert false)
 
-  | Syntax.Tuple(es) ->
+  | Stx.Tuple(es) ->
     let rec bind xs ts = function
       (* "xs" and "ts" are identifiers and types for the elements *)
       | [] -> Tuple(xs), Type.Tuple(ts)
@@ -218,13 +226,13 @@ let rec g env = function
           (fun x -> bind (xs @ [x]) (ts @ [t]) es) in
     bind [] [] es
 
-  | Syntax.LetTuple(xts, e1, e2) ->
+  | Stx.LetTuple(xts, e1, e2) ->
     convert_let (g env e1)
       (fun y ->
          let e2', t2 = g (M.add_list xts env) e2 in
          LetTuple(xts, y, e2'), t2)
 
-  | Syntax.Array(e1, e2) ->
+  | Stx.Array(e1, e2) ->
     convert_let (g env e1)
       (fun x ->
          let _, t2 as g_e2 = g env e2 in
@@ -236,19 +244,20 @@ let rec g env = function
                 | _ -> "create_array" in
               ExtFunApp(l, [x; y]), Type.Array(t2)))
 
-  | Syntax.Get(e1, e2) ->
+  | Stx.Get(e1, e2) ->
     (match g env e1 with
-     |        _, Type.Array(t) as g_e1 ->
+     | _, Type.Array(t) as g_e1 ->
        convert_let g_e1
          (fun x -> convert_let (g env e2)
              (fun y -> Get(x, y), t))
-     | _ -> assert false)
+     | _ ->
+       assert false)
 
-  | Syntax.Put(e1, e2, e3) ->
+  | Stx.Put(e1, e2, e3) ->
     convert_let (g env e1)
       (fun x -> convert_let (g env e2)
           (fun y -> convert_let (g env e3)
               (fun z -> Put(x, y, z), Type.Unit)))
 
-let f e =
+let normalize e =
   fst (g M.empty e)
