@@ -9,7 +9,7 @@ let () =
       );
       (
         "-iter",
-        Arg.Int(fun n -> Pipeline.max_opt_iter := n),
+        Arg.Int(fun m -> Pipeline.max_opt_iter := m),
         "maximum number of optimization iterations"
       )
     ]
