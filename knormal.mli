@@ -30,6 +30,6 @@ and fundef = {
 }
 
 
-val gather_ids : t -> S.t
+val free_vars : t -> S.t
 
 val normalize : Syntax.t -> t

@@ -1,4 +1,5 @@
 type id_or_imm = V of Id.t | C of int
+
 type t =
   | Ans of exp
   | Let of (Id.t * Type.t) * exp * t
@@ -30,9 +31,11 @@ and exp =
   (* closure address, integer arguments, and float arguments *)
   | CallCls of Id.t * Id.t list * Id.t list
   | CallDir of Id.l * Id.t list * Id.t list
-  | Save of Id.t * Id.t (* レジスタ変数の値をスタック変数へ保存 *)
-  | Restore of Id.t (* スタック変数から値を復元 *)
+  | Save of Id.t * Id.t
+  | Restore of Id.t
+
 type fundef = { name : Id.l; args : Id.t list; fargs : Id.t list; body : t; ret : Type.t }
+
 type prog = Prog of (Id.l * float) list * fundef list * t
 
 val fletd : Id.t * exp * t -> t (* shorthand of Let for float *)

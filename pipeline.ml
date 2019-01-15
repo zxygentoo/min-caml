@@ -22,7 +22,7 @@ let compile outchan buf =
   |> Parser.exp Lexer.token
   |> Typing.infer
   |> Knormal.normalize
-  |> Alpha.f
+  |> Alpha.convert
   |> optimize_pass !max_opt_iter
   |> Closure.f
   |> Virtual.f
@@ -43,6 +43,7 @@ let compile_file filename =
   with e ->
     (close_in inchan; close_out outchan; raise e)
 
+(* 
 let () =
   let files = ref [] in
   Arg.parse
@@ -67,3 +68,6 @@ let () =
     );
 
   List.iter (fun file -> ignore (compile_file file)) !files
+ *)
+
+let inline_threshold = Inline.threshold

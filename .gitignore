@@ -18,6 +18,9 @@ parser.mli
 min-caml
 min-caml.top
 
+# dune build directory
+_build
+
 # tests generated files
 test/*
 !test/*.ml

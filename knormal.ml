@@ -24,6 +24,7 @@ type t =
   | Put of Id.t * Id.t * Id.t
   | ExtArray of Id.t
   | ExtFunApp of Id.t * Id.t list
+
 and fundef = {
   name : Id.t * Type.t;
   args : (Id.t * Type.t) list;
@@ -31,7 +32,7 @@ and fundef = {
 }
 
 
-let rec gather_ids = function
+let rec free_vars = function
   | Unit | Int(_) | Float(_) | ExtArray(_) ->
     S.empty
 
@@ -43,16 +44,16 @@ let rec gather_ids = function
     S.of_list [x; y]
 
   | IfEq(x, y, e1, e2) | IfLE(x, y, e1, e2) ->
-    S.union (gather_ids e1) (gather_ids e2) |> S.add y |> S.add x
+    S.union (free_vars e1) (free_vars e2) |> S.add y |> S.add x
 
   | Let((x, _t), e1, e2) ->
-    S.union (gather_ids e1) (S.remove x (gather_ids e2))
+    S.union (free_vars e1) (S.remove x (free_vars e2))
 
   | Var(x) -> S.singleton x
 
   | LetRec({ name = (x, _t); args; body }, e2) ->
-    let zs = S.diff (gather_ids body) (S.of_list (List.map fst args)) in
-    S.diff (S.union zs (gather_ids e2)) (S.singleton x)
+    let zs = S.diff (free_vars body) (S.of_list (List.map fst args)) in
+    S.diff (S.union zs (free_vars e2)) (S.singleton x)
 
   | App(x, ys) -> S.of_list (x :: ys)
 
@@ -62,7 +63,7 @@ let rec gather_ids = function
   | Put(x, y, z) -> S.of_list [x; y; z]
 
   | LetTuple(xs, y, e) ->
-    S.add y (S.diff (gather_ids e) (S.of_list (List.map fst xs)))
+    S.add y (S.diff (free_vars e) (S.of_list (List.map fst xs)))
 
 
 let convert_let (exp, ty) k =
@@ -163,10 +164,10 @@ let rec g env = function
        failwith (
          Printf.sprintf "external variable %s does not have an array type" x))
 
-  | Stx.LetRec({ Stx.name = (x, t); Stx.args = args; Stx.body = e1 }, e2) ->
+  | Stx.LetRec({ name = (x, t); args; body }, e2) ->
     let env' = M.add x t env in
     let e2', t2 = g env' e2 in
-    let e1', _t1 = g (M.add_list args env') e1 in
+    let e1', _t1 = g (M.add_list args env') body in
     LetRec({ name = (x, t); args = args; body = e1' }, e2'), t2
 
   | Stx.App(Stx.Var(f), e2s) when not (M.mem f env) ->
@@ -241,6 +242,7 @@ let rec g env = function
       (fun x -> convert_let (g env e2)
           (fun y -> convert_let (g env e3)
               (fun z -> Put(x, y, z), Type.Unit)))
+
 
 let normalize e =
   fst (g M.empty e)

@@ -272,7 +272,8 @@ let h { name = Id.L(x); args = ys; fargs = zs; body = e; ret = t } =
   { name = Id.L(x); args = arg_regs; fargs = farg_regs; body = e'; ret = t }
 
 let f (Prog(data, fundefs, e)) =
-  Format.eprintf "==> register allocation: may take some time (depending on function sizes)@.";
+  Format.eprintf "==> register allocation: may take some time \
+                  (depending on function sizes)@.";
   let fundefs' = List.map h fundefs in
   let e', _regenv' = g (Id.gentmp Type.Unit, Type.Unit) (Ans(Nop)) M.empty e in
   Prog(data, fundefs', e')

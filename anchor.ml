@@ -6,7 +6,7 @@ let rec loop previous_lines =
     let new_line =
       try
         ignore (Str.search_forward re current_line 0);
-        let comment = Str.matched_group 2 current_line in
+        (* let comment = Str.matched_group 2 current_line in *)
         let anchor = Str.matched_group 3 current_line in
         Printf.printf "<a name=\"%s\"></a>" anchor;
         Str.global_replace re "\\1* \\2 *\\4" current_line

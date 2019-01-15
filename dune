@@ -1,0 +1,12 @@
+(executable
+    (name comp)
+    (modules comp)
+    (libraries pipeline))
+
+(library
+    (name pipeline)
+    (modules (:standard \ comp))
+    (c_names float))
+
+(ocamllex lexer)
+(ocamlyacc parser)

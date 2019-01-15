@@ -1,7 +1,9 @@
 open Knormal
 
+
 let find x env =
   try M.find x env with Not_found -> x
+
 
 let rec g env = function
   | Unit -> Unit
@@ -41,9 +43,10 @@ let rec g env = function
     let ys = List.map fst args in
     let env' = M.add_list2 ys (List.map Id.genid ys) env in
     LetRec(
-      { name = (find x env, t)
-      ; args = List.map (fun (y, t) -> (find y env', t)) args
-      ; body = g env' body
+      {
+        name = (find x env, t);
+        args = List.map (fun (y, t) -> (find y env', t)) args;
+        body = g env' body
       },
       g env e2
     )
@@ -69,5 +72,6 @@ let rec g env = function
 
   | ExtFunApp(x, ys) -> ExtFunApp(x, List.map (fun y -> find y env) ys)
 
-let f =
+
+let convert =
   g M.empty
