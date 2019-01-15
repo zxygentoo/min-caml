@@ -14,12 +14,12 @@ let rec optimize_pass n ast =
                   |> Inline.f
                   |> Constfold.f
                   |> Elim.f
-    in if ast = ast_new
-    then ast
+    in
+    if ast = ast_new then ast
     else optimize_pass (n - 1) ast_new
 
 
-let compile outchan buf =
+let compile oc buf =
   Id.counter := 0;
   Typing.extenv := M.empty;
   buf
@@ -32,7 +32,7 @@ let compile outchan buf =
   |> Virtual.f
   |> Simm.f
   |> Regalloc.f
-  |> Emit.f outchan
+  |> Emit.f oc
 
 
 let compile_string str =
@@ -40,11 +40,11 @@ let compile_string str =
 
 
 let compile_file filename =
-  let inchan = open_in (filename ^ ".ml") in
-  let outchan = open_out (filename ^ ".s") in
+  let ic = open_in (filename ^ ".ml") in
+  let oc = open_out (filename ^ ".s") in
   try
-    compile outchan (Lexing.from_channel inchan);
-    close_in inchan;
-    close_out outchan;
+    compile oc (Lexing.from_channel ic);
+    close_in ic;
+    close_out oc;
   with e ->
-    (close_in inchan; close_out outchan; raise e)
+    (close_in ic; close_out oc; raise e)
