@@ -1,27 +1,37 @@
 open Asm
 
+
+type dest = Tail | NonTail of Id.t
+
 external gethi : float -> int32 = "gethi"
 external getlo : float -> int32 = "getlo"
 
+
 let stackset = ref S.empty
+
 let stackmap = ref []
+
 let save x =
   stackset := S.add x !stackset;
   if not (List.mem x !stackmap) then
     stackmap := !stackmap @ [x]
+
 let savef x =
   stackset := S.add x !stackset;
   if not (List.mem x !stackmap) then
     (let pad =
        if List.length !stackmap mod 2 = 0 then [] else [Id.gentmp Type.Int] in
      stackmap := !stackmap @ pad @ [x; x])
+
 let locate x =
   let rec loc = function
     | [] -> []
     | y :: zs when x = y -> 0 :: List.map succ (loc zs)
     | _y :: zs -> List.map succ (loc zs) in
   loc !stackmap
+
 let offset x = 4 * List.hd (locate x)
+
 let stacksize () = align (List.length !stackmap * 4)
 
 let pp_id_or_imm = function
@@ -42,12 +52,13 @@ let rec shuffle sw xys =
                                        xys)
   | xys, acyc -> acyc @ shuffle sw xys
 
-type dest = Tail | NonTail of Id.t
+
 let rec g oc = function
   | dest, Ans(exp) -> g' oc (dest, exp)
   | dest, Let((x, _t), exp, e) ->
     g' oc (NonTail(x), exp);
     g oc (dest, e)
+
 and g' oc = function
   | NonTail(_), Nop -> ()
   | NonTail(x), Set(i) -> Printf.fprintf oc "\tmovl\t$%d, %s\n" i x
@@ -214,6 +225,7 @@ and g' oc = function
       Printf.fprintf oc "\tmovl\t%s, %s\n" regs.(0) a
     else if List.mem a allfregs && a <> fregs.(0) then
       Printf.fprintf oc "\tmovsd\t%s, %s\n" fregs.(0) a
+
 and g'_tail_if oc e1 e2 b bn =
   let b_else = Id.genid (b ^ "_else") in
   Printf.fprintf oc "\t%s\t%s\n" bn b_else;
@@ -222,6 +234,7 @@ and g'_tail_if oc e1 e2 b bn =
   Printf.fprintf oc "%s:\n" b_else;
   stackset := stackset_back;
   g oc (Tail, e2)
+
 and g'_non_tail_if oc dest e1 e2 b bn =
   let b_else = Id.genid (b ^ "_else") in
   let b_cont = Id.genid (b ^ "_cont") in
@@ -236,6 +249,7 @@ and g'_non_tail_if oc dest e1 e2 b bn =
   Printf.fprintf oc "%s:\n" b_cont;
   let stackset2 = !stackset in
   stackset := S.inter stackset1 stackset2
+
 and g'_args oc x_reg_cl ys zs =
   assert (List.length ys <= Array.length regs - List.length x_reg_cl);
   assert (List.length zs <= Array.length fregs);
@@ -257,11 +271,13 @@ and g'_args oc x_reg_cl ys zs =
     (fun (z, fr) -> Printf.fprintf oc "\tmovsd\t%s, %s\n" z fr)
     (shuffle sw zfrs)
 
+
 let h oc { name = Id.L(x); args = _; fargs = _; body = e; ret = _ } =
   Printf.fprintf oc "%s:\n" x;
   stackset := S.empty;
   stackmap := [];
   g oc (Tail, e)
+
 
 let f oc (Prog(data, fundefs, e)) =
   Format.eprintf "==> generating assembly...@.";
