@@ -47,4 +47,6 @@ let compile_file filename =
     close_in ic;
     close_out oc;
   with e ->
-    (close_in ic; close_out oc; raise e)
+    close_in ic;
+    close_out oc;
+    raise e
