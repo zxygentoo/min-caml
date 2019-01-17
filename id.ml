@@ -4,9 +4,14 @@ type l = L of string
 let compare = Pervasives.compare
 
 let rec pp_list = function
-  | [] -> ""
-  | [x] -> x
-  | x :: xs -> x ^ " " ^ pp_list xs
+  | [] ->
+    ""
+
+  | [x] ->
+    x
+
+  | x :: xs ->
+    x ^ " " ^ pp_list xs
 
 let counter = ref 0
 

@@ -26,17 +26,19 @@ let compile oc buf =
   |> Alpha.convert
   |> optimize_pass !max_opt_iter
   |> Closure.f
-  |> Virtual.f
-  |> Simm.f
-  |> Regalloc.f
-  |> Emit.f oc
+  (* |> Virtual.f *)
+  (* |> Simm.f *)
+  (* |> Regalloc.f *)
+  (* |> Emit.f oc *)
+  (* |> Wasm.f *)
+  |> Wasmit.emit oc
 
 let compile_string str =
   compile stdout (Lexing.from_string str)
 
 let compile_file filename =
   let ic = open_in (filename ^ ".ml") in
-  let oc = open_out (filename ^ ".s") in
+  let oc = open_out (filename ^ ".wat") in
   try
     compile oc (Lexing.from_channel ic);
     close_in ic;

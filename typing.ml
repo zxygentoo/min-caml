@@ -5,6 +5,7 @@ exception Unify of Type.t * Type.t
 exception Error of t * Type.t * Type.t
 
 
+(* externals typing env *)
 let extenv = ref M.empty
 
 
@@ -279,10 +280,11 @@ let infer e =
    | _ -> Format.eprintf "warning: final result does not have type unit@."
   ) ;
  *)
+
   (
     try unify Type.Unit (g M.empty e)
     with Unify _ ->
-      failwith "==> top level does not have type unit."
+      Format.eprintf "==> [warning] top level does not have type unit@."
   ) ;
   extenv := M.map deref_typ !extenv ;
   deref_term e

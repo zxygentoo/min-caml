@@ -1,12 +1,7 @@
 (executable
     (name comp)
-    (modules comp)
-    (libraries pipeline))
-
-(library
-    (name pipeline)
-    (modules (:standard \ comp))
-    (c_names float))
+    ; (modules (:standard \ asm virtual simm regalloc emit))
+    )
 
 (ocamllex lexer)
 (ocamlyacc parser)
