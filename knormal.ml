@@ -49,13 +49,15 @@ let rec free_vars = function
   | Let((x, _t), e1, e2) ->
     S.union (free_vars e1) (S.remove x (free_vars e2))
 
-  | Var(x) -> S.singleton x
+  | Var(x) ->
+    S.singleton x
 
   | LetRec({ name = (x, _t); args; body }, e2) ->
     let zs = S.diff (free_vars body) (S.of_list (List.map fst args)) in
     S.diff (S.union zs (free_vars e2)) (S.singleton x)
 
-  | App(x, ys) -> S.of_list (x :: ys)
+  | App(x, ys) ->
+    S.of_list (x :: ys)
 
   | Tuple(xs) | ExtFunApp(_, xs) ->
     S.of_list xs
@@ -76,17 +78,23 @@ let convert_let (exp, ty) k =
 
 
 let rec g env = function
-  | Stx.Unit -> Unit, Type.Unit
+  | Stx.Unit ->
+    Unit, Type.Unit
 
-  | Stx.Bool(b) -> Int(if b then 1 else 0), Type.Int
+  | Stx.Bool(b) ->
+    Int(if b then 1 else 0), Type.Int
 
-  | Stx.Int(i) -> Int(i), Type.Int
+  | Stx.Int(i) ->
+    Int(i), Type.Int
 
-  | Stx.Float(d) -> Float(d), Type.Float
+  | Stx.Float(d) ->
+    Float(d), Type.Float
 
-  | Stx.Not(e) -> g env (Stx.If(e, Stx.Bool(false), Stx.Bool(true)))
+  | Stx.Not(e) ->
+    g env (Stx.If(e, Stx.Bool(false), Stx.Bool(true)))
 
-  | Stx.Neg(e) -> convert_let (g env e) (fun x -> Neg(x), Type.Int)
+  | Stx.Neg(e) ->
+    convert_let (g env e) (fun x -> Neg(x), Type.Int)
 
   | Stx.Add(e1, e2) ->
     convert_let
@@ -126,7 +134,8 @@ let rec g env = function
   | Stx.Eq _ | Stx.LE _ as cmp ->
     g env (Stx.If(cmp, Stx.Bool(true), Stx.Bool(false)))
 
-  | Stx.If(Stx.Not(e1), e2, e3) -> g env (Stx.If(e1, e3, e2))
+  | Stx.If(Stx.Not(e1), e2, e3) ->
+    g env (Stx.If(e1, e3, e2))
 
   | Stx.If(Stx.Eq(e1, e2), e3, e4) ->
     convert_let
@@ -154,7 +163,8 @@ let rec g env = function
     let e2', t2 = g (M.add x t env) e2 in
     Let((x, t), e1', e2'), t2
 
-  | Stx.Var(x) when M.mem x env -> Var(x), M.find x env
+  | Stx.Var(x) when M.mem x env ->
+    Var(x), M.find x env
 
   | Stx.Var(x) ->
     (match M.find x !Typing.extenv with
