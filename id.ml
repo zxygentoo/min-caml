@@ -1,5 +1,5 @@
 type t = string
-type l = L of string
+type label = Label of string
 
 let compare = Pervasives.compare
 

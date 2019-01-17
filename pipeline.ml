@@ -25,7 +25,7 @@ let compile oc buf =
   |> Knormal.normalize
   |> Alpha.convert
   |> optimize_pass !max_opt_iter
-  |> Closure.f
+  |> Closure.flattern
   (* |> Virtual.f *)
   (* |> Simm.f *)
   (* |> Regalloc.f *)

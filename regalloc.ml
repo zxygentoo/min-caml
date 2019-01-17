@@ -198,7 +198,7 @@ and g' dest cont regenv = function
     else
       g'_call dest cont regenv exp
         (fun ys zs -> CallCls(find x Type.Int regenv, ys, zs)) ys zs
-  | CallDir(Id.L(x), ys, zs) as exp ->
+  | CallDir(Id.Label(x), ys, zs) as exp ->
     if List.length ys > Array.length regs
     || List.length zs > Array.length fregs then
       failwith (
@@ -206,7 +206,7 @@ and g' dest cont regenv = function
       )
     else
       g'_call dest cont regenv exp
-        (fun ys zs -> CallDir(Id.L(x), ys, zs)) ys zs
+        (fun ys zs -> CallDir(Id.Label(x), ys, zs)) ys zs
   | Save(_x, _y) -> assert false
 and g'_if dest cont regenv _exp constr e1 e2 =
   let (e1', regenv1) = g dest cont regenv e1 in
@@ -241,7 +241,7 @@ and g'_call dest cont regenv _exp constr ys zs =
      (fv cont),
    M.empty)
 
-let h { name = Id.L(x); args = ys; fargs = zs; body = e; ret = t } =
+let h { name = Id.Label(x); args = ys; fargs = zs; body = e; ret = t } =
   let regenv = M.add x reg_cl M.empty in
   let (_i, arg_regs, regenv) =
     List.fold_left
@@ -269,7 +269,7 @@ let h { name = Id.L(x); args = ys; fargs = zs; body = e; ret = t } =
     | Type.Float -> fregs.(0)
     | _ -> regs.(0) in
   let (e', _regenv') = g (a, t) (Ans(Mov(a))) regenv e in
-  { name = Id.L(x); args = arg_regs; fargs = farg_regs; body = e'; ret = t }
+  { name = Id.Label(x); args = arg_regs; fargs = farg_regs; body = e'; ret = t }
 
 let f (Prog(data, fundefs, e)) =
   Format.eprintf "==> register allocation: may take some time \

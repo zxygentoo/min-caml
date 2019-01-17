@@ -3,7 +3,7 @@ module C = Closure
 let eln = Printf.fprintf
 
 let func_name (funcdef: C.fundef) : string =
-  let Id.L(name), _ = funcdef.name in
+  let Id.Label(name), _ = funcdef.name in
   List.hd (String.split_on_char '.' name)
 
 let func_body (funcdef: C.fundef) : C.t =

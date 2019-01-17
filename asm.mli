@@ -6,7 +6,7 @@ type t =
 and exp =
   | Nop
   | Set of int
-  | SetL of Id.l
+  | SetL of Id.label
   | Mov of Id.t
   | Neg of Id.t
   | Add of Id.t * id_or_imm
@@ -30,19 +30,19 @@ and exp =
   | IfFLE of Id.t * Id.t * t * t
   (* closure address, integer arguments, and float arguments *)
   | CallCls of Id.t * Id.t list * Id.t list
-  | CallDir of Id.l * Id.t list * Id.t list
+  | CallDir of Id.label * Id.t list * Id.t list
   | Save of Id.t * Id.t
   | Restore of Id.t
 
 type fundef = {
-  name : Id.l;
+  name : Id.label;
   args : Id.t list;
   fargs : Id.t list;
   body : t;
   ret : Type.t
 }
 
-type prog = Prog of (Id.l * float) list * fundef list * t
+type prog = Prog of (Id.label * float) list * fundef list * t
 
 
 val fletd : Id.t * exp * t -> t (* shorthand of Let for float *)

@@ -62,7 +62,7 @@ let rec g oc = function
 and g' oc = function
   | NonTail(_), Nop -> ()
   | NonTail(x), Set(i) -> Printf.fprintf oc "\tmovl\t$%d, %s\n" i x
-  | NonTail(x), SetL(Id.L(y)) -> Printf.fprintf oc "\tmovl\t$%s, %s\n" y x
+  | NonTail(x), SetL(Id.Label(y)) -> Printf.fprintf oc "\tmovl\t$%s, %s\n" y x
   | NonTail(x), Mov(y) ->
     if x <> y then Printf.fprintf oc "\tmovl\t%s, %s\n" y x
   | NonTail(x), Neg(y) ->
@@ -202,7 +202,7 @@ and g' oc = function
   | Tail, CallCls(x, ys, zs) -> (* 末尾呼び出し (caml2html: emit_tailcall) *)
     g'_args oc [(x, reg_cl)] ys zs;
     Printf.fprintf oc "\tjmp\t*(%s)\n" reg_cl;
-  | Tail, CallDir(Id.L(x), ys, zs) -> (* 末尾呼び出し *)
+  | Tail, CallDir(Id.Label(x), ys, zs) -> (* 末尾呼び出し *)
     g'_args oc [] ys zs;
     Printf.fprintf oc "\tjmp\t%s\n" x;
   | NonTail(a), CallCls(x, ys, zs) ->
@@ -215,7 +215,7 @@ and g' oc = function
       Printf.fprintf oc "\tmovl\t%s, %s\n" regs.(0) a
     else if List.mem a allfregs && a <> fregs.(0) then
       Printf.fprintf oc "\tmovsd\t%s, %s\n" fregs.(0) a
-  | NonTail(a), CallDir(Id.L(x), ys, zs) ->
+  | NonTail(a), CallDir(Id.Label(x), ys, zs) ->
     g'_args oc [] ys zs;
     let ss = stacksize () in
     if ss > 0 then Printf.fprintf oc "\taddl\t$%d, %s\n" ss reg_sp;
@@ -272,7 +272,7 @@ and g'_args oc x_reg_cl ys zs =
     (shuffle sw zfrs)
 
 
-let h oc { name = Id.L(x); args = _; fargs = _; body = e; ret = _ } =
+let h oc { name = Id.Label(x); args = _; fargs = _; body = e; ret = _ } =
   Printf.fprintf oc "%s:\n" x;
   stackset := S.empty;
   stackmap := [];
@@ -284,7 +284,7 @@ let f oc (Prog(data, fundefs, e)) =
   Printf.fprintf oc ".data\n";
   Printf.fprintf oc ".balign\t8\n";
   List.iter
-    (fun (Id.L(x), d) ->
+    (fun (Id.Label(x), d) ->
        Printf.fprintf oc "%s:\t# %f\n" x d;
        Printf.fprintf oc "\t.long\t0x%lx\n" (gethi d);
        Printf.fprintf oc "\t.long\t0x%lx\n" (getlo d))

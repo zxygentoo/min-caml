@@ -44,7 +44,7 @@ let rec g env = function
         let (l, _) = List.find (fun (_, d') -> d = d') !data in
         l
       with Not_found ->
-        let l = Id.L(Id.genid "l") in
+        let l = Id.Label(Id.genid "l") in
         data := (l, d) :: !data;
         l in
     let x = Id.genid "l" in
@@ -123,9 +123,9 @@ let rec g env = function
     let (int, float) = separate (List.map (fun y -> (y, M.find y env)) ys) in
     Ans(CallCls(x, int, float))
 
-  | Closure.AppDir(Id.L(x), ys) ->
+  | Closure.AppDir(Id.Label(x), ys) ->
     let (int, float) = separate (List.map (fun y -> (y, M.find y env)) ys) in
-    Ans(CallDir(Id.L(x), int, float))
+    Ans(CallDir(Id.Label(x), int, float))
 
   | Closure.Tuple(xs) ->
     let y = Id.genid "t" in
@@ -169,11 +169,11 @@ let rec g env = function
      | Type.Array(_) -> Ans(St(z, x, V(y), 4))
      | _ -> assert false)
 
-  | Closure.ExtArray(Id.L(x)) ->
-    Ans(SetL(Id.L("min_caml_" ^ x)))
+  | Closure.ExtArray(Id.Label(x)) ->
+    Ans(SetL(Id.Label("min_caml_" ^ x)))
 
 let h {
-    Closure.name = (Id.L(x), t);
+    Closure.name = (Id.Label(x), t);
     Closure.args = yts;
     Closure.formal_fv = zts;
     Closure.body = e
@@ -187,7 +187,7 @@ let h {
       (fun z t offset load -> Let((z, t), Ld(x, C(offset), 1), load)) in
   match t with
   | Type.Fun(_, t2) ->
-    { name = Id.L(x); args = int; fargs = float; body = load; ret = t2 }
+    { name = Id.Label(x); args = int; fargs = float; body = load; ret = t2 }
   | _ ->
     assert false
 
