@@ -90,6 +90,7 @@ let rec free_vars = function
 let args_fv args =
   S.of_list (List.map fst args)
 
+(* closure conversion *)
 let rec g env known = function
   | K.Unit ->
     Unit
