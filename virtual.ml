@@ -86,10 +86,17 @@ let rec g env = function
        failwith "equality supported only for bool, int, and float")
 
   | Closure.IfLE(x, y, e1, e2) ->
-    (match M.find x env with
-     | Type.Bool | Type.Int -> Ans(IfLE(x, V(y), g env e1, g env e2))
-     | Type.Float -> Ans(IfFLE(x, y, g env e1, g env e2))
-     | _ -> failwith "inequality supported only for bool, int, and float")
+    (
+      match M.find x env with
+      | Type.Bool | Type.Int ->
+        Ans(IfLE(x, V(y), g env e1, g env e2))
+
+      | Type.Float ->
+        Ans(IfFLE(x, y, g env e1, g env e2))
+
+      | _ ->
+        failwith "inequality supported only for bool, int, and float"
+    )
 
   | Closure.Let((x, t1), e1, e2) ->
     let e1' = g env e1 in
@@ -97,10 +104,17 @@ let rec g env = function
     concat e1' (x, t1) e2'
 
   | Closure.Var(x) ->
-    (match M.find x env with
-     | Type.Unit -> Ans(Nop)
-     | Type.Float -> Ans(FMovD(x))
-     | _ -> Ans(Mov(x)))
+    (
+      match M.find x env with
+      | Type.Unit ->
+        Ans(Nop)
+
+      | Type.Float ->
+        Ans(FMovD(x))
+
+      | _ ->
+        Ans(Mov(x))
+    )
 
   | Closure.MakeCls(
       (x, t), { Closure.entry = l; Closure.actual_fv = ys }, e2

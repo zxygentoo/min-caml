@@ -72,13 +72,19 @@ let reg_hp = "min_caml_hp" (* heap pointer (caml2html: sparcasm_reghp) *)
 
 (* let reg_ra = "%eax" (* return address *) *)
 
-let is_reg x = (x.[0] = '%' || x = reg_hp)
+let is_reg x =
+  x.[0] = '%' || x = reg_hp
 
 (* super-tenuki *)
 let rec remove_and_uniq xs = function
-  | [] -> []
-  | x :: ys when S.mem x xs -> remove_and_uniq xs ys
-  | x :: ys -> x :: remove_and_uniq (S.add x xs) ys
+  | [] ->
+    []
+
+  | x :: ys when S.mem x xs ->
+    remove_and_uniq xs ys
+
+  | x :: ys ->
+    x :: remove_and_uniq (S.add x xs) ys
 
 (* free variables in the order of use (for spilling) (caml2html: sparcasm_fv) *)
 
@@ -87,30 +93,52 @@ let fv_id_or_imm = function
   | _ -> []
 
 let rec fv_exp = function
-  | Nop | Set(_) | SetL(_) | Comment(_) | Restore(_) -> []
-  | Mov(x) | Neg(x) | FMovD(x) | FNegD(x) | Save(x, _) -> [x]
+  | Nop | Set(_) | SetL(_) | Comment(_) | Restore(_) ->
+    []
+
+  | Mov(x) | Neg(x) | FMovD(x) | FNegD(x) | Save(x, _) ->
+    [x]
+
   | Add(x, y') | Sub(x, y') | Ld(x, y', _) | LdDF(x, y', _) ->
     x :: fv_id_or_imm y'
-  | St(x, y, z', _) | StDF(x, y, z', _) -> x :: y :: fv_id_or_imm z'
-  | FAddD(x, y) | FSubD(x, y) | FMulD(x, y) | FDivD(x, y) -> [x; y]
+
+  | St(x, y, z', _) | StDF(x, y, z', _) ->
+    x :: y :: fv_id_or_imm z'
+
+  | FAddD(x, y) | FSubD(x, y) | FMulD(x, y) | FDivD(x, y) ->
+    [x; y]
+
   | IfEq(x, y', e1, e2) | IfLE(x, y', e1, e2) | IfGE(x, y', e1, e2) ->
     (* uniq here just for efficiency *)
     x :: fv_id_or_imm y' @ remove_and_uniq S.empty (fv e1 @ fv e2)
+
   | IfFEq(x, y, e1, e2) | IfFLE(x, y, e1, e2) ->
     (* uniq here just for efficiency *)
     x :: y :: remove_and_uniq S.empty (fv e1 @ fv e2)
-  | CallCls(x, ys, zs) -> x :: ys @ zs
-  | CallDir(_, ys, zs) -> ys @ zs
+
+  | CallCls(x, ys, zs) ->
+    x :: ys @ zs
+
+  | CallDir(_, ys, zs) ->
+    ys @ zs
+
 and fv = function
-  | Ans(exp) -> fv_exp exp
+  | Ans(exp) ->
+    fv_exp exp
+
   | Let((x, _t), exp, e) ->
     fv_exp exp @ remove_and_uniq (S.singleton x) (fv e)
 
-let fv e = remove_and_uniq S.empty (fv e)
+let fv e =
+  remove_and_uniq S.empty (fv e)
 
 let rec concat e1 xt e2 =
   match e1 with
-  | Ans(exp) -> Let(xt, exp, e2)
-  | Let(yt, exp, e1') -> Let(yt, exp, concat e1' xt e2)
+  | Ans(exp) ->
+    Let(xt, exp, e2)
 
-let align i = (if i mod 8 = 0 then i else i + 4)
+  | Let(yt, exp, e1') ->
+    Let(yt, exp, concat e1' xt e2)
+
+let align i =
+  if i mod 8 = 0 then i else i + 4
