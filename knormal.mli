@@ -20,6 +20,7 @@ type t =
   | LetTuple of (Id.t * Type.t) list * Id.t * t
   | Get of Id.t * Id.t
   | Put of Id.t * Id.t * Id.t
+  (* externals *)
   | ExtArray of Id.t
   | ExtFunApp of Id.t * Id.t list
 
@@ -30,6 +31,10 @@ and fundef = {
 }
 
 
+val convert_let : t * Type.t -> (Id.t -> t * Type.t) -> t * Type.t
+
 val free_vars : t -> S.t
+
+val g : Type.t M.t -> Syntax.t -> t * Type.t
 
 val normalize : Syntax.t -> t

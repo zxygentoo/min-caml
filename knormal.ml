@@ -52,9 +52,9 @@ let rec free_vars = function
   | Var(x) ->
     S.singleton x
 
-  | LetRec({ name = (x, _t); args; body }, e2) ->
-    let zs = S.diff (free_vars body) (S.of_list (List.map fst args)) in
-    S.diff (S.union zs (free_vars e2)) (S.singleton x)
+  | LetRec({ name = (x, _t); args; body }, exp) ->
+    let body_fvs = S.diff (free_vars body) (S.of_list (List.map fst args)) in
+    S.diff (S.union body_fvs (free_vars exp)) (S.singleton x)
 
   | App(x, ys) ->
     S.of_list (x :: ys)
@@ -108,8 +108,7 @@ let rec g env = function
 
   | Stx.FNeg(e) ->
     convert_let
-      (g env e)
-      (fun x -> FNeg(x), Type.Float)
+      (g env e) (fun x -> FNeg(x), Type.Float)
 
   | Stx.FAdd(e1, e2) ->
     convert_let
@@ -143,7 +142,7 @@ let rec g env = function
       (fun x -> convert_let (g env e2)
           (fun y ->
              let e3', t3 = g env e3 in
-             let e4', _t4 = g env e4 in
+             let e4', _ = g env e4 in
              IfEq(x, y, e3', e4'), t3))
 
   | Stx.If(Stx.LE(e1, e2), e3, e4) ->
@@ -159,7 +158,7 @@ let rec g env = function
     g env (Stx.If(Stx.Eq(e1, Stx.Bool(false)), e3, e2))
 
   | Stx.Let((x, t), e1, e2) ->
-    let e1', _t1 = g env e1 in
+    let e1', _ = g env e1 in
     let e2', t2 = g (M.add x t env) e2 in
     Let((x, t), e1', e2'), t2
 
@@ -167,58 +166,77 @@ let rec g env = function
     Var(x), M.find x env
 
   | Stx.Var(x) ->
-    (match M.find x !Typing.extenv with
-     | Type.Array(_) as t ->
-       ExtArray x, t
-     | _ -> 
-       failwith (
-         Printf.sprintf "external variable %s does not have an array type" x))
+    (
+      match M.find x !Typing.extenv with
+      | Type.Array(_) as t ->
+        ExtArray x, t
+
+      | _ -> 
+        failwith (Printf.sprintf "external `%s` doesn't have array type@." x)
+    )
 
   | Stx.LetRec({ name = (x, t); args; body }, e2) ->
     let env' = M.add x t env in
     let e2', t2 = g env' e2 in
-    let e1', _t1 = g (M.add_list args env') body in
-    LetRec({ name = (x, t); args = args; body = e1' }, e2'), t2
+    let e1', _ = g (M.add_list args env') body in
+    LetRec({ name = (x, t); args; body = e1' }, e2'), t2
 
   | Stx.App(Stx.Var(f), e2s) when not (M.mem f env) ->
-    (match M.find f !Typing.extenv with
-     | Type.Fun(_, t) ->
-       let rec bind xs = function
-         (* "xs" are identifiers for the arguments *)
-         | [] ->
-           ExtFunApp(f, xs), t
-         | e2 :: e2s ->
-           convert_let (g env e2)
-             (fun x -> bind (xs @ [x]) e2s) in
-       (* left-to-right evaluation *)
-       bind [] e2s
-     | _ -> assert false)
+    (
+      match M.find f !Typing.extenv with
+      | Type.Fun(_, t) ->
+        (* "xs" are identifiers for the arguments *)
+        let rec bind xs = function
+          | [] ->
+            ExtFunApp(f, xs), t
+
+          | e :: es ->
+            convert_let (g env e)
+              (fun x -> bind (xs @ [x]) es)
+        in
+        (* left-to-right evaluation *)
+        bind [] e2s
+
+      | _ ->
+        failwith (Printf.sprintf "can't find external `%s`@." f)
+    )
 
   | Stx.App(e1, e2s) ->
-    (match g env e1 with
-     | _, Type.Fun(_, t) as g_e1 ->
-       convert_let g_e1
-         (fun f ->
-            let rec bind xs = function
-              (* "xs" are identifiers for the arguments *)
-              | [] ->
-                App(f, xs), t
-              | e2 :: e2s ->
-                convert_let (g env e2)
-                  (fun x -> bind (xs @ [x]) e2s) in
-            (* left-to-right evaluation *)
-            bind [] e2s)
-     | _ -> assert false)
+    (
+      match g env e1 with
+      | _, Type.Fun(_, t) as g_e1 ->
+        convert_let g_e1
+          (fun f ->
+             (* "xs" are identifiers for the arguments *)
+             let rec bind xs = function
+               | [] ->
+                 App(f, xs), t
 
-  | Stx.Tuple(es) ->
+               | e2 :: e2s ->
+                 convert_let (g env e2)
+                   (fun x -> bind (xs @ [x]) e2s)
+             in
+             (* left-to-right evaluation *)
+             bind [] e2s)
+
+      | _ ->
+        failwith (
+          Printf.sprintf "frist expression of App doesn't have Fun type@."
+        )
+    )
+
+  | Stx.Tuple(exps) ->
     let rec bind xs ts = function
       (* "xs" and "ts" are identifiers and types for the elements *)
-      | [] -> Tuple(xs), Type.Tuple(ts)
+      | [] ->
+        Tuple(xs), Type.Tuple(ts)
+
       | e :: es ->
         let _, t as g_e = g env e in
         convert_let g_e
-          (fun x -> bind (xs @ [x]) (ts @ [t]) es) in
-    bind [] [] es
+          (fun x -> bind (xs @ [x]) (ts @ [t]) es)
+    in
+    bind [] [] exps
 
   | Stx.LetTuple(xts, e1, e2) ->
     convert_let (g env e1)
@@ -234,18 +252,25 @@ let rec g env = function
            (fun y ->
               let l =
                 match t2 with
-                | Type.Float -> "create_float_array"
-                | _ -> "create_array" in
+                | Type.Float ->
+                  "create_float_array"
+
+                | _ -> 
+                  "create_array"
+              in
               ExtFunApp(l, [x; y]), Type.Array(t2)))
 
   | Stx.Get(e1, e2) ->
-    (match g env e1 with
-     | _, Type.Array(t) as g_e1 ->
-       convert_let g_e1
-         (fun x -> convert_let (g env e2)
-             (fun y -> Get(x, y), t))
-     | _ ->
-       assert false)
+    (
+      match g env e1 with
+      | _, Type.Array(t) as g_e1 ->
+        convert_let g_e1
+          (fun x -> convert_let (g env e2)
+              (fun y -> Get(x, y), t))
+
+      | _ ->
+        assert false
+    )
 
   | Stx.Put(e1, e2, e3) ->
     convert_let (g env e1)
