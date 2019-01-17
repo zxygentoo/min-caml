@@ -26,11 +26,7 @@ let compile oc buf =
   |> Alpha.convert
   |> optimize_pass !max_opt_iter
   |> Closure.flattern
-  (* |> Virtual.f *)
-  (* |> Simm.f *)
-  (* |> Regalloc.f *)
-  (* |> Emit.f oc *)
-  (* |> Wasm.f *)
+  |> Wasm.codegen
   |> Wasmit.emit oc
 
 let compile_string str =

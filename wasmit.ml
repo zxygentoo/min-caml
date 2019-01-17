@@ -1,7 +1,8 @@
-module C = Closure
+(* open Wasm *)
 
 let eln = Printf.fprintf
 
+(* 
 let func_name (funcdef: C.fundef) : string =
   let Id.Label(name), _ = funcdef.name in
   List.hd (String.split_on_char '.' name)
@@ -36,16 +37,14 @@ let func_body oc n funcdef =
   g oc (func_body funcdef);
   eln oc "  (i64.const 42)\n";
   eln oc " )\n"
+ *)
 
-let emit oc prog =
-  let C.Prog(funcdefs, _e) = prog in
+let emit oc _prog =
   Format.eprintf "==> generating WebAssembly...@.";
   eln oc "(module\n";
   eln oc " (table 0 anyfunc)\n";
   eln oc " (memory $0 1)\n";
   eln oc " (export \"memory\" (memory $0))\n";
   (* func exports *)
-  List.iter (fun funcdef -> func_export oc funcdef) funcdefs;
   (* func bodies *)
-  List.iteri (fun n funcdef -> func_body oc n funcdef) funcdefs;
   eln oc ")\n";
