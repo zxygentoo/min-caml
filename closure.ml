@@ -174,8 +174,8 @@ let rec g env known = function
       { name = (Id.Label(x), t); args = args; formal_fv; body = body' } ;
 
     (* make or eliminate closure *)
-    let cls_convert_exp known =
-      let exp' = g env' known exp in
+    let cls_convert_exp known_ =
+      let exp' = g env' known_ exp in
       if S.mem x (free_vars exp') then
         begin
           Format.eprintf "--> making closure `%s`@." x ;
