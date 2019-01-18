@@ -1,1 +1,1 @@
-val f : Closure.prog -> Asm.prog
+val gencode : Closure.prog -> Asm.prog

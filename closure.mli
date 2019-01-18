@@ -25,11 +25,12 @@ type t =
 
 and closure = {
   entry : Id.label;
-  actual_fv : Id.t list
+  actual_fv : Id.t list;
 }
 
 type fundef = {
   name : Id.label * Type.t;
+  is_cls : bool;
   args : (Id.t * Type.t) list;
   formal_fv : (Id.t * Type.t) list;
   body : t

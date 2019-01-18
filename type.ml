@@ -7,6 +7,7 @@ type t =
   | Tuple of t list
   | Array of t
   | Var of t option ref
+[@@deriving show]
 
 let gentyp () =
   Var(ref None)

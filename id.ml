@@ -1,5 +1,5 @@
-type t = string
-type label = Label of string
+type t = string [@@deriving show]
+type label = Label of string [@@deriving show]
 
 let compare = Pervasives.compare
 

@@ -68,7 +68,7 @@ let reg_fsw = fregs.(Array.length fregs - 1) (* temporary for swap *)
 
 let reg_sp = "%ebp" (* stack pointer *)
 
-let reg_hp = "min_caml_hp" (* heap pointer (caml2html: sparcasm_reghp) *)
+let reg_hp = "min_caml_hp" (* heap pointer *)
 
 (* let reg_ra = "%eax" (* return address *) *)
 
@@ -86,7 +86,7 @@ let rec remove_and_uniq xs = function
   | x :: ys ->
     x :: remove_and_uniq (S.add x xs) ys
 
-(* free variables in the order of use (for spilling) (caml2html: sparcasm_fv) *)
+(* free variables in the order of use (for spilling) *)
 
 let fv_id_or_imm = function
   | V(x) -> [x]

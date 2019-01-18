@@ -279,7 +279,7 @@ let h oc { name = Id.Label(x); args = _; fargs = _; body = e; ret = _ } =
   g oc (Tail, e)
 
 
-let f oc (Prog(data, fundefs, e)) =
+let emitcode oc (Prog(data, fundefs, e)) =
   Format.eprintf "==> generating assembly...@.";
   Printf.fprintf oc ".data\n";
   Printf.fprintf oc ".balign\t8\n";

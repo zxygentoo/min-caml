@@ -28,16 +28,18 @@ type t =
 and closure = {
   entry : Id.label;
   actual_fv : Id.t list
-}
+} [@@deriving show]
 
 type fundef = {
   name : Id.label * Type.t;
+  is_cls : bool;
   args : (Id.t * Type.t) list;
   formal_fv : (Id.t * Type.t) list;
   body : t
 }
+[@@deriving show]
 
-type prog = Prog of fundef list * t
+type prog = Prog of fundef list * t [@@deriving show]
 
 
 let toplevel : fundef list ref = ref []
@@ -166,21 +168,32 @@ let rec g env known = function
     in
     let known', body' = cls_convert_body () in
 
-    (* add toplevel fundef *)
     let actual_fv =
       S.elements (S.diff (free_vars body') (S.add x (args_fv args))) in
     let formal_fv =
       List.map (fun z -> (z, M.find z env')) actual_fv in
+    let exp' = g env' known' exp in
+    let is_cls = S.mem x (free_vars exp') in
+
+    (* add toplevel fundef *)
     add_toplevel_fundef
-      { name = (Id.Label(x), t); args = args; formal_fv; body = body' } ;
+      {
+        name = (Id.Label(x), t);
+        is_cls = is_cls;
+        args;
+        formal_fv;
+        body = body'
+      } ;
 
     (* make or eliminate closure *)
-    let cls_convert_exp known_ =
-      let exp' = g env' known_ exp in
-      if S.mem x (free_vars exp') then
+    let cls_convert_exp e =
+      if is_cls then
         begin
           Format.eprintf "--> making closure `%s`@." x ;
-          MakeCls((x, t), { entry = Id.Label(x); actual_fv }, exp')
+          Format.eprintf
+            "==> Cls: %s\n"
+            (show_closure { entry = Id.Label(x); actual_fv }) ;
+          MakeCls((x, t), { entry = Id.Label(x); actual_fv }, e)
         end
       else
         begin
@@ -188,7 +201,7 @@ let rec g env known = function
           exp'
         end
     in
-    cls_convert_exp known'
+    cls_convert_exp exp'
 
   | K.App(x, ys) when S.mem x known ->
     Format.eprintf "--> directly applying %s@." x ;
@@ -218,4 +231,14 @@ let rec g env known = function
 let flattern e =
   toplevel := [];
   let e' = g M.empty S.empty e in
-  Prog(List.rev !toplevel, e')
+  let prog = Prog(List.rev !toplevel, e')
+  in
+  (* Printf.eprintf "==> Prog: \n%s\n" (show_prog prog) ; *)
+  ignore (show_prog prog) ;
+  Printf.eprintf "==> Prog:\n" ;
+  (List.iteri 
+     (fun n fs -> Printf.eprintf "==> Fundef %d: \n%s\n" n (show_fundef fs))
+     (let Prog(fs, _) = prog in fs)
+  ) ;
+  Printf.eprintf "==> Expression: \n%s\n" (show e') ;
+  prog

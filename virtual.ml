@@ -8,18 +8,24 @@ let classify xts ini addf addi =
   List.fold_left
     (fun acc (x, t) ->
        match t with
-       | Type.Unit -> acc
-       | Type.Float -> addf acc x
-       | _ -> addi acc x t)
+       | Type.Unit ->
+         acc
+
+       | Type.Float ->
+         addf acc x
+
+       | _ ->
+         addi acc x t)
     ini
     xts
 
+(* seperate float args with other args *)
 let separate xts =
   classify
     xts
     ([], [])
-    (fun (int, float) x -> (int, float @ [x]))
-    (fun (int, float) x _ -> (int @ [x], float))
+    (fun (i, a) x -> (i, a @ [x]))
+    (fun (i, a) x _ -> (i @ [x], a))
 
 let expand xts ini addf addi =
   classify
@@ -31,6 +37,7 @@ let expand xts ini addf addi =
     (fun (offset, acc) x t ->
        (offset + 4, addi x t offset acc))
 
+(* code generation *)
 let rec g env = function
   | Closure.Unit ->
     Ans(Nop)
@@ -46,7 +53,8 @@ let rec g env = function
       with Not_found ->
         let l = Id.Label(Id.genid "l") in
         data := (l, d) :: !data;
-        l in
+        l
+    in
     let x = Id.genid "l" in
     Let((x, Type.Int), SetL(l), Ans(LdDF(x, C(0), 1)))
 
@@ -75,15 +83,17 @@ let rec g env = function
     Ans(FDivD(x, y))
 
   | Closure.IfEq(x, y, e1, e2) ->
-    (match M.find x env with
-     | Type.Bool | Type.Int ->
-       Ans(IfEq(x, V(y), g env e1, g env e2))
+    (
+      match M.find x env with
+      | Type.Bool | Type.Int ->
+        Ans(IfEq(x, V(y), g env e1, g env e2))
 
-     | Type.Float ->
-       Ans(IfFEq(x, y, g env e1, g env e2))
+      | Type.Float ->
+        Ans(IfFEq(x, y, g env e1, g env e2))
 
-     | _ -> 
-       failwith "equality supported only for bool, int, and float")
+      | _ -> 
+        failwith "equality supported only for bool, int, and float"
+    )
 
   | Closure.IfLE(x, y, e1, e2) ->
     (
@@ -117,21 +127,21 @@ let rec g env = function
     )
 
   | Closure.MakeCls(
-      (x, t), { Closure.entry = l; Closure.actual_fv = ys }, e2
+      (x, t), { Closure.entry; Closure.actual_fv }, e2
     ) ->
     let e2' = g (M.add x t env) e2 in
     let offset, store_fv =
       expand
-        (List.map (fun y -> (y, M.find y env)) ys)
+        (List.map (fun y -> (y, M.find y env)) actual_fv)
         (4, e2')
         (fun y offset store_fv -> seq(StDF(y, x, C(offset), 1), store_fv))
-        (fun y _ offset store_fv -> seq(St(y, x, C(offset), 1), store_fv)) in
+        (fun y _ offset store_fv -> seq(St(y, x, C(offset), 1), store_fv))
+    in
     Let((x, t), Mov(reg_hp),
         Let((reg_hp, Type.Int), Add(reg_hp, C(align offset)),
-            let z = Id.genid "l" in
-            Let((z, Type.Int), SetL(l),
-                seq(St(z, x, C(0), 1),
-                    store_fv))))
+            let z = Id.genid "entry" in
+            Let((z, Type.Int), SetL(entry),
+                seq(St(z, x, C(0), 1), store_fv))))
 
   | Closure.AppCls(x, ys) ->
     let (int, float) = separate (List.map (fun y -> (y, M.find y env)) ys) in
@@ -154,7 +164,7 @@ let rec g env = function
             store))
 
   | Closure.LetTuple(xts, y, e2) ->
-    let s = Closure.fv e2 in
+    let s = Closure.free_vars e2 in
     let (_offset, load) =
       expand
         xts
@@ -170,43 +180,64 @@ let rec g env = function
     load
 
   | Closure.Get(x, y) ->
-    (match M.find x env with
-     | Type.Array(Type.Unit) -> Ans(Nop)
-     | Type.Array(Type.Float) -> Ans(LdDF(x, V(y), 8))
-     | Type.Array(_) -> Ans(Ld(x, V(y), 4))
-     | _ -> assert false)
+    (
+      match M.find x env with
+      | Type.Array(Type.Unit) ->
+        Ans(Nop)
+
+      | Type.Array(Type.Float) ->
+        Ans(LdDF(x, V(y), 8))
+
+      | Type.Array(_) ->
+        Ans(Ld(x, V(y), 4))
+
+      | _ ->
+        assert false
+    )
 
   | Closure.Put(x, y, z) ->
-    (match M.find x env with
-     | Type.Array(Type.Unit) -> Ans(Nop)
-     | Type.Array(Type.Float) -> Ans(StDF(z, x, V(y), 8))
-     | Type.Array(_) -> Ans(St(z, x, V(y), 4))
-     | _ -> assert false)
+    (
+      match M.find x env with
+      | Type.Array(Type.Unit) ->
+        Ans(Nop)
+
+      | Type.Array(Type.Float) ->
+        Ans(StDF(z, x, V(y), 8))
+
+      | Type.Array(_) ->
+        Ans(St(z, x, V(y), 4))
+
+      | _ ->
+        assert false
+    )
 
   | Closure.ExtArray(Id.Label(x)) ->
     Ans(SetL(Id.Label("min_caml_" ^ x)))
 
-let h {
+let genfundef {
     Closure.name = (Id.Label(x), t);
-    Closure.args = yts;
-    Closure.formal_fv = zts;
-    Closure.body = e
+    Closure.args;
+    Closure.formal_fv;
+    Closure.body;
+    Closure.is_cls = _
   } =
-  let (int, float) = separate yts in
+  let (int, float) = separate args in
   let (_offset, load) =
     expand
-      zts
-      (4, g (M.add x t (M.add_list yts (M.add_list zts M.empty))) e)
+      formal_fv
+      (4, g (M.add x t (M.add_list args (M.add_list formal_fv M.empty))) body)
       (fun z offset load -> fletd(z, LdDF(x, C(offset), 1), load))
-      (fun z t offset load -> Let((z, t), Ld(x, C(offset), 1), load)) in
+      (fun z t offset load -> Let((z, t), Ld(x, C(offset), 1), load))
+  in
   match t with
   | Type.Fun(_, t2) ->
     { name = Id.Label(x); args = int; fargs = float; body = load; ret = t2 }
+
   | _ ->
     assert false
 
-let f (Closure.Prog(fundefs, e)) =
+let gencode (Closure.Prog(fundefs, e)) =
   data := [];
-  let fundefs = List.map h fundefs in
+  let fundefs = List.map genfundef fundefs in
   let e = g M.empty e in
   Prog(!data, fundefs, e)

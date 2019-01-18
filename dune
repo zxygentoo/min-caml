@@ -1,7 +1,13 @@
 (executable
     (name comp)
-    ; (modules (:standard \ asm virtual simm regalloc emit))
-    )
+    (libraries pipeline)
+    (modules comp))
+
+(library
+    (name pipeline)
+    (c_names float)
+    (preprocess (pps ppx_deriving.std))
+    (modules (:standard \ comp wasm wasmit adder_closure_ast)))
 
 (ocamllex lexer)
 (ocamlyacc parser)
