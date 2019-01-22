@@ -36,7 +36,8 @@ let compile_string str =
 
 let compile_file filename =
   let ic = open_in (filename ^ ".ml") in
-  let oc = open_out (filename ^ ".wat") in
+  let oc = open_out (filename ^ ".s") in
+  (* let oc = open_out (filename ^ ".wat") in *)
   try
     compile oc (Lexing.from_channel ic);
     close_in ic;

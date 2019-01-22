@@ -1,3 +1,7 @@
+(env
+    (dev
+        (flags (:standard -warn-error -A))))
+
 (executable
     (name comp)
     (libraries pipeline)

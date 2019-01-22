@@ -7,4 +7,4 @@ S /home/zxy/.opam/4.07.0/lib/ppx_deriving
 S /home/zxy/.opam/4.07.0/lib/result
 S .
 FLG -ppx '/home/zxy/Projects/min-caml/_build/default/.ppx/30a18adec0a1407675322d723bf1b0ae/ppx.exe --as-ppx --cookie '\''library-name="pipeline"'\'''
-FLG -w @a-4-29-40-41-42-44-45-48-58-59-60-40 -strict-sequence -strict-formats -short-paths -keep-locs -open Pipeline__ -w @a-4-29-40-41-42-44-45-48-58-59-60-40 -strict-sequence -strict-formats -short-paths -keep-locs
+FLG -w @a-4-29-40-41-42-44-45-48-58-59-60-40 -strict-sequence -strict-formats -short-paths -keep-locs -warn-error -A -open Pipeline__ -w @a-4-29-40-41-42-44-45-48-58-59-60-40 -strict-sequence -strict-formats -short-paths -keep-locs -warn-error -A
