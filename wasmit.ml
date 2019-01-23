@@ -20,7 +20,7 @@ let id_to_offset id =
 
 let seperate_fundefs fundefs =
   let rec f fds clss fns =
-  match fds with
+    match fds with
     | [] ->
       (List.rev clss), (List.rev fns)
 
@@ -35,29 +35,28 @@ let get_local_or_load oc bvs var_ty_env id =
   if S.mem id bvs
   then eln oc "get_local $%s\n" id
   else if M.mem id var_ty_env
-  then begin
-    let ty = M.find id var_ty_env in
-    match ty with
-    | T.Int ->
-      eln oc "i32.const %d\n" (id_to_offset id) ;
-      eln oc "i32.load\n"
+  then let ty = M.find id var_ty_env in
+    (
+      match ty with
+      | T.Int ->
+        eln oc "i32.const %d\n" (id_to_offset id) ;
+        eln oc "i32.load\n"
 
-    | T.Fun(args, _) ->
-      List.iter
-        (fun i ->
-          eln oc "i32.const %d\n" (id_to_offset id) ;
-          if i > 0 then begin
-            eln oc "i32.const %d\n" (i * offset_unit) ;
-            eln oc "i32.add\n" ;
-          end ;
-          eln oc "i32.load\n" ;
-          eln oc "i32.load\n"
-        )
-        (List.init (List.length args + 1) (fun i -> i)) ;
+      | T.Fun(args, _) ->
+        List.iter
+          (fun i ->
+            eln oc "i32.const %d\n" (id_to_offset id) ;
+            if i > 0 then begin
+              eln oc "i32.const %d\n" (i * offset_unit) ;
+              eln oc "i32.add\n" ;
+            end ;
+            eln oc "i32.load\n" ;
+            eln oc "i32.load\n")
+          (List.init (List.length args + 1) (fun i -> i)) ;
 
-    | _ ->
-      Printf.eprintf "~~> don't know how to do this yet...\n"
-  end
+      | _ ->
+        Printf.eprintf "~~> don't know how to do this yet...\n"
+    )
   else failwith "~~> don't know var ty..."
 
 
@@ -92,16 +91,19 @@ let rec g oc bvs labidx tyidx var_ty_env = function
 
   | MakeCls((x, _), { entry; actual_fv }, e) ->
     let base = id_to_offset x in
+
     (* store fv *)
     eln oc "i32.const %d\n" base ;
     List.iter (get_local_or_load oc bvs var_ty_env) (List.rev actual_fv) ;
     eln oc "i32.store\n" ;
+
     (* store funaddr *)
     eln oc "i32.const %d\n" (base + offset_unit * (List.length actual_fv)) ;
     let Id.Label(label) = entry in
     let idx, _ty = (M.find label labidx) in
     eln oc "i32.const %d\n" idx ;
     eln oc "i32.store\n" ;
+
     (* body *)
     g oc bvs labidx tyidx var_ty_env e
 
