@@ -12,7 +12,7 @@
     (c_names float)
     (preprocess (pps ppx_deriving.std))
 ;    (modules (:standard \ comp wasm wasmit adder_closure_ast)))
-    (modules (:standard \ comp virtual simm regalloc asm emit adder_closure_ast)))
+    (modules (:standard \ comp wasm virtual simm regalloc asm emit adder_closure_ast)))
 
 (ocamllex lexer)
 (ocamlyacc parser)

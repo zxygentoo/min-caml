@@ -28,7 +28,7 @@ let compile oc buf =
   |> Closure.flattern
   (* |> Virtual.gencode *)
   (* |> Emit.emitcode oc *)
-  |> Wasm.codegen
+  (* |> Wasm.codegen *)
   |> Wasmit.emit oc
 
 let compile_string str =

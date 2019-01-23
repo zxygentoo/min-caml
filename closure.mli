@@ -30,7 +30,6 @@ and closure = {
 
 type fundef = {
   name : Id.label * Type.t;
-  is_cls : bool;
   args : (Id.t * Type.t) list;
   formal_fv : (Id.t * Type.t) list;
   body : t

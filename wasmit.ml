@@ -1,9 +1,21 @@
-open Wasm
+open Closure
 module T = Type
 
 
 let eln =
   Printf.fprintf
+
+(* now we only dealing with i32 consts and memory address, so all 4 bytes *)
+let offset_unit = 4
+
+let id_to_offset id =
+  let uid = id
+    |> String.split_on_char '.'
+    |> List.rev
+    |> List.hd
+    |> int_of_string
+  in
+  uid * offset_unit
 
 let seperate_fundefs fundefs =
   let rec f fds clss fns =
@@ -68,7 +80,6 @@ let emit_type oc {
   eln oc "))\n"
 
 let emit_table oc clss =
-  eln oc "\n;; table section\n" ;
   List.iter (emit_type oc) clss ;
   List.iter (emit_func oc) clss ;
   eln oc "(table %d anyfunc)\n" (List.length clss) ;
@@ -84,6 +95,8 @@ let emit oc (Prog(fundefs, e)) =
   eln oc "(export \"memory\" (memory $0))\n" ;
 
   let clss, fns = seperate_fundefs fundefs in
+
+  eln oc "\n;; table section\n" ;
   emit_table oc clss ;
 
   eln oc "\n;; function section\n" ;
@@ -91,9 +104,9 @@ let emit oc (Prog(fundefs, e)) =
 
   eln oc "\n;; start function\n" ;
   eln oc "(func $start (result i32)\n" ;
-  eln oc "(i32.const 42)\n" ;
   g oc e;
   eln oc ")\n" ;
+
   eln oc "\n;; export start\n" ;
   eln oc "(export \"start\" (func $start))\n" ;
 

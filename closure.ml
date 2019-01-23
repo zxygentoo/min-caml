@@ -33,7 +33,6 @@ and closure = {
 
 type fundef = {
   name : Id.label * Type.t;
-  is_cls : bool;
   args : (Id.t * Type.t) list;
   formal_fv : (Id.t * Type.t) list;
   body : t
@@ -180,7 +179,6 @@ let rec g env known = function
     add_toplevel_fundef
       {
         name = (Id.Label(x), t);
-        is_cls = is_cls;
         args;
         formal_fv;
         body = body'
