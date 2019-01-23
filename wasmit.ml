@@ -1,5 +1,13 @@
 open Closure
+
 module T = Type
+
+module TM = Map.Make(
+  struct
+    type t = Type.t
+    let compare = compare
+  end
+)
 
 
 let eln =
@@ -58,14 +66,6 @@ let get_local_or_load oc bvs var_ty_env id =
         Printf.eprintf "~~> don't know how to do this yet...\n"
     )
   else failwith "~~> don't know var ty..."
-
-
-module TM = Map.Make(
-  struct
-    type t = Type.t
-    let compare = compare
-  end
-)
 
 let rec g oc bvs labidx tyidx var_ty_env = function
   | Unit ->
