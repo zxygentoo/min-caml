@@ -8,43 +8,48 @@ and exp =
   | Comment of string
   | Nop
   | Int of int
-  | Float of float
-  | Neg of Id.t
+  (* | Float of float *)
+  (* | Neg of Id.t *)
   | Add of Id.t * Id.t
-  | Sub of Id.t * Id.t
-  | FSub of Id.t * Id.t
-  | FMul of Id.t * Id.t
-  | FDiv of Id.t * Id.t
-  | Select of Id.t * Id.t * Id.t * t * t * t
-  | CallCls of Id.t * Id.t list * Id.t list
-  | CallDir of Id.label * Id.t list * Id.t list
+  (* | Sub of Id.t * Id.t *)
+  (* | FSub of Id.t * Id.t *)
+  (* | FMul of Id.t * Id.t *)
+  (* | FDiv of Id.t * Id.t *)
+  | MakeCls of (Id.t * Type.t) * closure * t
+  | Call of Id.t * Id.t list * Id.t list
+  | CallInDir of Id.label * Id.t list * Id.t list
+
+and closure = {
+  entry : Id.label;
+  actual_fv : Id.t list;
+}
 
 type fundef = {
   name : Id.label * Type.t;
   args : (Id.t * Type.t) list;
   formal_fv : (Id.t * Type.t) list;
   body : t;
-  ret : Type.t
+  (* ret : Type.t *)
 }
 
 type prog = Prog of fundef list * t
 
 
-let f _env = function
+let g _env = function
   | C.Unit ->
     Asm(Nop)
 
   | C.Int(i) ->
     Asm(Int(i))
 
-  | C.Float(a) ->
-    Asm(Float(a))
+  | C.Float(_a) ->
+    Asm(Nop)
 
   | C.Neg(_) ->
     Asm(Nop)
 
-  | C.Add(_, _) ->
-    Asm(Nop)
+  | C.Add(x, y) ->
+    Asm(Add(x, y))
 
   | C.Sub(_, _) ->
     Asm(Nop)
@@ -76,7 +81,7 @@ let f _env = function
   | C.Var(_) ->
     Asm(Nop)
 
-  | C.MakeCls((_, _), { entry = _; actual_fv = _ }, _) ->
+  | C.MakeCls((_x, _t), { C.entry = _; C.actual_fv = _ }, _e) ->
     Asm(Nop)
 
   | C.AppCls(_, _) ->
@@ -101,6 +106,24 @@ let f _env = function
     Asm(Nop)
 
 
+let genfundef {
+  C.name = (Id.Label(x), t);
+  C.args = args;
+  C.formal_fv = formal_fv;
+  C.body = body;
+  C.is_cls = _
+} = {
+  name = (Id.Label(x), t);
+  args = args;
+  formal_fv = formal_fv;
+  body = g
+    (M.empty |> M.add_list formal_fv |> M.add_list args |> M.add x t) body;
+  (* ret = Type.Int *)
+}
 
-let codegen ast =
-  ast
+
+let codegen (C.Prog(fundefs, e)) =
+  Prog(
+    List.map genfundef fundefs,
+    g M.empty e
+  )

@@ -1,5 +1,11 @@
-let rec make_adder x y =
-  let u = y - 2 in
-  let rec adder z = x + u + z in
-  adder in
-(make_adder 1 3) 5
+(* let rec make_adder x y =
+  let u = y - x in
+  let rec adder z = z + u in
+  adder
+in ((make_adder 111 222) 777)
+ *)
+
+let rec make_adder x =
+  let rec adder y = x + y in
+  adder
+in ((make_adder 333) 777)

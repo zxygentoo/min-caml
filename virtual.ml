@@ -240,4 +240,10 @@ let gencode (Closure.Prog(fundefs, e)) =
   data := [];
   let fundefs = List.map genfundef fundefs in
   let e = g M.empty e in
-  Prog(!data, fundefs, e)
+  let prog = Prog(!data, fundefs, e) in
+  Printf.eprintf "------------------------------\n" ;
+  (* Printf.eprintf "==> Expression: \n%s\n" (show e') ; *)
+  (* Printf.eprintf "==> Expression: \n%s\n" (show e') ; *)
+  (* Printf.eprintf "==> Expression: \n%s\n" (show e') ; *)
+  Printf.eprintf "==> Prog: \n%s\n" (show_prog prog) ;
+  prog

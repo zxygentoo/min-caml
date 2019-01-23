@@ -43,6 +43,7 @@ type fundef = {
 }
 
 type prog = Prog of (Id.label * float) list * fundef list * t
+[@@deriving show]
 
 
 val fletd : Id.t * exp * t -> t (* shorthand of Let for float *)

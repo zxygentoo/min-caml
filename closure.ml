@@ -28,7 +28,8 @@ type t =
 and closure = {
   entry : Id.label;
   actual_fv : Id.t list
-} [@@deriving show]
+} 
+[@@deriving show]
 
 type fundef = {
   name : Id.label * Type.t;
@@ -233,12 +234,13 @@ let flattern e =
   let e' = g M.empty S.empty e in
   let prog = Prog(List.rev !toplevel, e')
   in
-  (* Printf.eprintf "==> Prog: \n%s\n" (show_prog prog) ; *)
-  ignore (show_prog prog) ;
-  Printf.eprintf "==> Prog:\n" ;
+  Printf.eprintf "==> Prog: \n%s\n" (show_prog prog) ;
+  (* ignore (show_prog prog) ; *)
+(*   Printf.eprintf "==> Prog:\n" ;
   (List.iteri 
      (fun n fs -> Printf.eprintf "==> Fundef %d: \n%s\n" n (show_fundef fs))
      (let Prog(fs, _) = prog in fs)
   ) ;
   Printf.eprintf "==> Expression: \n%s\n" (show e') ;
-  prog
+ *)  
+   prog

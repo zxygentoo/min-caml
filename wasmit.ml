@@ -1,50 +1,100 @@
-(* open Wasm *)
+open Wasm
+module T = Type
 
-let eln = Printf.fprintf
 
-(* 
-let func_name (funcdef: C.fundef) : string =
-  let Id.Label(name), _ = funcdef.name in
-  List.hd (String.split_on_char '.' name)
+let eln =
+  Printf.fprintf
 
-let func_body (funcdef: C.fundef) : C.t =
-  funcdef.body
+let seperate_fundefs fundefs =
+  let rec f fds clss fns =
+  match fds with
+  | [] ->
+    (List.rev clss), (List.rev fns)
 
-let func_export oc funcdef =
-  let name = func_name funcdef in
-  eln oc " (export \"%s\" (func $%s))\n" name name
+  | x :: xs ->
+    if List.length x.formal_fv = 0
+    then f xs clss (x :: fns)
+    else f xs (x :: clss) fns
+in
+f fundefs [] []
 
-let rec g oc = function
-  | C.Unit ->
-    eln oc ";; C.Unit\n"
+let rec g _oc _e =
+  ()
 
-  | C.Int(i) ->
-    eln oc ";; C.Int(%d)\n" i
+let t_to_s = function
+| T.Int -> "i32"
+| T.Fun(_) -> "i32"
+| _ -> failwith "don't know how to deal with this yet..."
 
-  | C.Add(_x, _y) ->
-    eln oc "  (i64.add x y)\n"
 
-  | C.Let((_x, _t1), e1, e2) ->
-    g oc e1;
-    g oc e2
+let emit_result oc ty =
+  eln oc "(result %s)" (t_to_s ty)
 
-  | _ ->
-    eln oc ";; \n"
+let emit_param oc with_label (label, ty) =
+  if with_label
+  then eln oc "(param $%s %s) " label (t_to_s ty)
+  else eln oc "(param %s) " (t_to_s ty)
 
-let func_body oc n funcdef =
-  let name = func_name funcdef in
-  eln oc " (func $%s (; %d ;) (result i64)\n" name n;
-  g oc (func_body funcdef);
-  eln oc "  (i64.const 42)\n";
-  eln oc " )\n"
- *)
+let emit_sig oc with_label ret_ty args =
+  List.iter (emit_param oc with_label) args ;
+  (
+    match ret_ty with
+    | T.Fun(_, ret) ->
+      emit_result oc ret
+    | _ ->
+      failwith "fundef doesn't have Fun type."
+  )
 
-let emit oc _prog =
-  Format.eprintf "==> generating WebAssembly...@.";
-  eln oc "(module\n";
-  eln oc " (table 0 anyfunc)\n";
-  eln oc " (memory $0 1)\n";
-  eln oc " (export \"memory\" (memory $0))\n";
-  (* func exports *)
-  (* func bodies *)
+let emit_func oc {
+  name = (Id.Label(label), ret_ty);
+  args;
+  formal_fv;
+  body
+} =
+  eln oc "(func $%s " label ;
+  emit_sig oc true ret_ty (formal_fv @ args) ;
+  eln oc "\n" ;
+  g oc body ;
+  eln oc ")\n"
+
+let emit_type oc {
+  name = (Id.Label(label), ret_ty);
+  args;
+  formal_fv;
+  body = _body
+} =
+  eln oc "(type $%s (func " label ;
+  emit_sig oc false ret_ty (formal_fv @ args);
+  eln oc "))\n"
+
+let emit_table oc clss =
+  eln oc "\n;; table section\n" ;
+  List.iter (emit_type oc) clss ;
+  List.iter (emit_func oc) clss ;
+  eln oc "(table %d anyfunc)\n" (List.length clss) ;
+  eln oc "(elem (i32.const 0) 0)\n"
+
+let emit oc (Prog(fundefs, e)) =
+  Format.eprintf "==> generating WebAssembly...@." ;
+
+  eln oc "(module\n" ;
+
+  eln oc "\n;; memory section\n" ;
+  eln oc "(memory $0 1)\n" ;
+  eln oc "(export \"memory\" (memory $0))\n" ;
+
+  let clss, fns = seperate_fundefs fundefs in
+  emit_table oc clss ;
+
+  eln oc "\n;; function section\n" ;
+  List.iter (emit_func oc) fns ;
+
+  eln oc "\n;; start function\n" ;
+  eln oc "(func $start (result i32)\n" ;
+  eln oc "(i32.const 42)\n" ;
+  g oc e;
+  eln oc ")\n" ;
+  eln oc "\n;; export start\n" ;
+  eln oc "(export \"start\" (func $start))\n" ;
+
   eln oc ")\n";

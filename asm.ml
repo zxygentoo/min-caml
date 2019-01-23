@@ -1,4 +1,4 @@
-type id_or_imm = V of Id.t | C of int
+type id_or_imm = V of Id.t | C of int [@@deriving show]
 
 type t =
   | Ans of exp
@@ -33,6 +33,7 @@ and exp =
   | CallDir of Id.label * Id.t list * Id.t list
   | Save of Id.t * Id.t
   | Restore of Id.t
+[@@deriving show]
 
 type fundef = {
   name : Id.label;
@@ -40,9 +41,12 @@ type fundef = {
   fargs : Id.t list;
   body : t;
   ret : Type.t
-}
+} [@@deriving show]
 
-type prog = Prog of (Id.label * float) list * fundef list * t
+
+type prog =
+  Prog of (Id.label * float) list * fundef list * t
+  [@@deriving show]
 
 
 let fletd(x, e1, e2) = Let((x, Type.Float), e1, e2)
