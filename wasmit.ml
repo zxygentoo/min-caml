@@ -41,6 +41,7 @@ let get_local_or_load oc bvs var_ty_env id =
     | T.Int ->
       eln oc "i32.const %d\n" (id_to_offset id) ;
       eln oc "i32.load\n"
+
     | T.Fun(args, _) ->
       List.iter
         (fun i ->
@@ -53,28 +54,21 @@ let get_local_or_load oc bvs var_ty_env id =
           eln oc "i32.load\n"
         )
         (List.init (List.length args + 1) (fun i -> i)) ;
+
     | _ ->
       Printf.eprintf "~~> don't know how to do this yet...\n"
   end
   else failwith "~~> don't know var ty..."
 
 
-let find_cls_sig x var_ty_env funcidx =
-  let module TM = Map.Make(struct
+module TM = Map.Make(
+  struct
     type t = Type.t
     let compare = compare
   end
-  ) in
-  let pairs = 
-    M.fold (fun label (idx, ty) acc -> (ty, label) :: acc) funcidx []
-  in
-  let tm = 
-    List.fold_left (fun acc (ty, label) -> TM.add ty label acc) TM.empty pairs
-  in
-  let ty = M.find x var_ty_env in
-  TM.find ty tm
+)
 
-let rec g oc bvs funcidx var_ty_env = function
+let rec g oc bvs labidx tyidx var_ty_env = function
   | Unit ->
     ()
 
@@ -88,28 +82,28 @@ let rec g oc bvs funcidx var_ty_env = function
   | Let((x, t), e1, e2) ->
     let var_ty_env' = M.add x t var_ty_env in
     eln oc "i32.const %d\n" (id_to_offset x) ;
-    g oc bvs funcidx var_ty_env' e1 ;
+    g oc bvs labidx tyidx var_ty_env' e1 ;
     eln oc "i32.store\n" ;
     eln oc "\n" ;
-    g oc bvs funcidx var_ty_env' e2
+    g oc bvs labidx tyidx var_ty_env' e2
 
   | Var(x) ->
       eln oc "i32.const %d\n" (id_to_offset x)
 
   | MakeCls((x, _), { entry; actual_fv }, e) ->
     let base = id_to_offset x in
-    (* store all fv *)
+    (* store fv *)
     eln oc "i32.const %d\n" base ;
     List.iter (get_local_or_load oc bvs var_ty_env) (List.rev actual_fv) ;
     eln oc "i32.store\n" ;
     (* store funaddr *)
     eln oc "i32.const %d\n" (base + offset_unit * (List.length actual_fv)) ;
     let Id.Label(label) = entry in
-    let idx, _ty = (M.find label funcidx) in
+    let idx, _ty = (M.find label labidx) in
     eln oc "i32.const %d\n" idx ;
     eln oc "i32.store\n" ;
     (* body *)
-    g oc bvs funcidx var_ty_env e
+    g oc bvs labidx tyidx var_ty_env e
 
   | AppDir(Id.Label(f), args) ->
     List.iter (get_local_or_load oc bvs var_ty_env) args ;
@@ -118,7 +112,7 @@ let rec g oc bvs funcidx var_ty_env = function
   | AppCls(x, args) ->
     List.iter (get_local_or_load oc bvs var_ty_env) args ;
     get_local_or_load oc bvs var_ty_env x ;
-    eln oc "call_indirect (type $%s)\n" (find_cls_sig x var_ty_env funcidx)
+    eln oc "call_indirect (type $%s)\n" (TM.find (M.find x var_ty_env) tyidx)
 
   | _ ->
     Printf.eprintf "~~> don't know how to do this yet...\n"
@@ -142,11 +136,12 @@ let emit_sig oc with_label ret_ty args =
     match ret_ty with
     | T.Fun(_, ret) ->
       emit_result oc ret
+
     | _ ->
       failwith "fundef doesn't have Fun type."
   )
 
-let emit_func oc funcidx clss {
+let emit_func oc labidx tyidx clss {
   name = (Id.Label(label), ret_ty);
   args;
   formal_fv;
@@ -156,9 +151,9 @@ let emit_func oc funcidx clss {
   eln oc "(func $%s " label ;
   emit_sig oc true ret_ty all_args ;
   eln oc "\n" ;
-  g oc (
-    S.of_list (List.map (fun (label, _) -> label) all_args)
-  ) funcidx clss body ;
+  g 
+    oc (S.of_list (List.map (fun (label, _) -> label) all_args))
+    labidx tyidx clss body ;
   eln oc ")\n"
 
 let emit_type oc {
@@ -171,19 +166,20 @@ let emit_type oc {
   emit_sig oc false ret_ty (formal_fv @ args);
   eln oc "))\n"
 
-let emit_table oc funcidx clss var_ty_env =
+let emit_table oc labidx tyidx clss var_ty_env =
   List.iter (emit_type oc) clss ;
-  List.iter (emit_func oc funcidx var_ty_env) clss ;
+  List.iter (emit_func oc labidx tyidx var_ty_env) clss ;
   eln oc "(table %d anyfunc)\n" (List.length clss) ;
   eln oc "(elem (i32.const 0) 0)\n"
 
-let funcindex fns =
-  M.empty
-  |> M.add_list (
-    List.mapi
-      (fun i fn -> let Id.Label(label), ty = fn.name in (label, (i, ty)))
-      fns
-  )
+let labelindex fns =
+  let f = fun i fn -> let Id.Label(lab), ty = fn.name in (lab, (i, ty)) in
+  M.empty |> M.add_list (List.mapi f fns)
+
+let typeindex fns =
+  List.fold_left
+    (fun acc fd -> let Id.Label(lab), ty = fd.name in TM.add ty lab acc)
+    TM.empty fns
 
 let emit oc (Prog(fundefs, e)) =
   Format.eprintf "==> generating WebAssembly...@." ;
@@ -195,18 +191,19 @@ let emit oc (Prog(fundefs, e)) =
   eln oc "(export \"memory\" (memory $0))\n" ;
 
   let clss, fns = seperate_fundefs fundefs in
-  let funcidx = funcindex clss in
+  let labidx = labelindex clss in
+  let tyidx = typeindex clss in
   let var_ty_env = M.empty in
 
   eln oc "\n;; table section\n" ;
-  emit_table oc funcidx clss var_ty_env ;
+  emit_table oc labidx tyidx clss var_ty_env ;
 
   eln oc "\n;; function section\n" ;
-  List.iter (emit_func oc funcidx var_ty_env) fns ;
+  List.iter (emit_func oc labidx tyidx var_ty_env) fns ;
 
   eln oc "\n;; start function\n" ;
   eln oc "(func $start (result i32)\n" ;
-  g oc S.empty funcidx var_ty_env e ;
+  g oc S.empty labidx tyidx var_ty_env e ;
   eln oc ")\n" ;
 
   eln oc "\n;; export start\n" ;
