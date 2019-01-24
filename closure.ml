@@ -227,15 +227,6 @@ let rec g env known = function
 let flattern e =
   toplevel := [];
   let e' = g M.empty S.empty e in
-  let prog = Prog(List.rev !toplevel, e')
-  in
+  let prog = Prog(List.rev !toplevel, e') in
   Printf.eprintf "==> Prog: \n%s\n" (show_prog prog) ;
-  (* ignore (show_prog prog) ; *)
-(*   Printf.eprintf "==> Prog:\n" ;
-  (List.iteri 
-     (fun n fs -> Printf.eprintf "==> Fundef %d: \n%s\n" n (show_fundef fs))
-     (let Prog(fs, _) = prog in fs)
-  ) ;
-  Printf.eprintf "==> Expression: \n%s\n" (show e') ;
- *)  
-   prog
+  prog
