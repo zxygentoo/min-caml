@@ -39,28 +39,30 @@ let seperate_fundefs fundefs =
   in
   f fundefs [] []
 
-let get_local_or_load oc bvs var_ty_env id =
+let get_local_or_load oc bvs var_ty_env base _i id =
+  (* let hp = base + (i * offset_unit) in *)
   if S.mem id bvs
-  then eln oc "get_local $%s\n" id
+  then begin
+    (* eln oc "i32.const %d\n" hp ; *)
+    eln oc "get_local $%s\n" id ;
+    (* eln oc "i32.store\n" ; *)
+  end
   else if M.mem id var_ty_env
   then let ty = M.find id var_ty_env in
     (
       match ty with
       | T.Int ->
-        eln oc "i32.const %d\n" (id_to_offset id) ;
+        eln oc "i32.const %d\n" base ;
         eln oc "i32.load\n"
 
       | T.Fun(args, _) ->
         List.iter
-          (fun i ->
-            eln oc "i32.const %d\n" (id_to_offset id) ;
-            if i > 0 then begin
-              eln oc "i32.const %d\n" (i * offset_unit) ;
-              eln oc "i32.add\n" ;
-            end ;
-            eln oc "i32.load\n" ;
-            eln oc "i32.load\n")
-          (List.init (List.length args + 1) (fun i -> i)) ;
+          (
+            fun j ->
+              eln oc "(i32.load (i32.load (i32.const %d)))\n"
+                (base + (j * offset_unit)) ;
+          )
+          (List.init (List.length args) (fun i -> i)) ;
 
       | _ ->
         Printf.eprintf "~~> don't know how to do this yet...\n"
@@ -72,49 +74,115 @@ let rec g oc bvs labidx tyidx var_ty_env = function
     ()
 
   | Int(i) ->
-    eln oc "i32.const %d\n" i
+    eln oc "i32.const %d ;; Int %d\n" i i
 
   | Add(x, y) ->
-    List.iter (get_local_or_load oc bvs var_ty_env) [x; y] ;
+    eln oc ";; Let %s %s\n" x y ;
+    get_local_or_load oc bvs var_ty_env (id_to_offset x) 0 x ;
+    get_local_or_load oc bvs var_ty_env (id_to_offset y) 0 y ;
     eln oc "i32.add\n"
 
   | Let((x, t), e1, e2) ->
+    eln oc ";; Let %s\n" x ;
     let var_ty_env' = M.add x t var_ty_env in
+    eln oc ";; %s\n" x ;
     eln oc "i32.const %d\n" (id_to_offset x) ;
-    g oc bvs labidx tyidx var_ty_env' e1 ;
+    g oc bvs labidx tyidx var_ty_env e1 ;
     eln oc "i32.store\n" ;
-    eln oc "\n" ;
     g oc bvs labidx tyidx var_ty_env' e2
 
   | Var(x) ->
-      eln oc "i32.const %d\n" (id_to_offset x)
+      if S.mem x bvs
+      then eln oc "get_local $%s\n" x
+      else eln oc "i32.const %d\n" (id_to_offset x)
 
-  | MakeCls((x, _), { entry; actual_fv }, e) ->
+  | MakeCls((x, t), { entry; actual_fv }, e) ->
+    eln oc ";; MakeCls: %s\n" x ;
+    let var_ty_env' = M.add x t var_ty_env in
     let base = id_to_offset x in
 
     (* store fv *)
-    eln oc "i32.const %d\n" base ;
-    List.iter (get_local_or_load oc bvs var_ty_env) (List.rev actual_fv) ;
-    eln oc "i32.store\n" ;
+    eln oc ";; %s: fv (total: %d) \n" x (List.length actual_fv) ;
+    List.iteri
+      (
+        fun i fv ->
+          let ofst = base + offset_unit * i in
+
+          if S.mem fv bvs
+          then
+            eln oc "(i32.store (i32.const %d) (get_local $%s))\n"
+              ofst fv
+          else
+            eln oc "(i32.store (i32.const %d) (i32.load (i32.const %d)))\n"
+              ofst (id_to_offset fv)
+          ;
+      )
+      (List.rev actual_fv) ;
 
     (* store funaddr *)
-    eln oc "i32.const %d\n" (base + offset_unit * (List.length actual_fv)) ;
+    eln oc ";; %s: funcaddr\n" x ;
     let Id.Label(label) = entry in
     let idx, _ty = (M.find label labidx) in
-    eln oc "i32.const %d\n" idx ;
-    eln oc "i32.store\n" ;
+    eln oc "(i32.store (i32.const %d) (i32.const %d))\n" 
+      (base + offset_unit * (List.length actual_fv))
+      idx ;
 
     (* body *)
-    g oc bvs labidx tyidx var_ty_env e
+    eln oc ";; %s: body\n" x ;
+    (* g oc (S.add x bvs) labidx tyidx var_ty_env' e *)
+    g oc bvs labidx tyidx var_ty_env' e
 
-  | AppDir(Id.Label(f), args) ->
-    List.iter (get_local_or_load oc bvs var_ty_env) args ;
-    eln oc "call $%s\n" f
+  | AppDir(Id.Label(x), args) ->
+    eln oc ";; AppDir %s\n" x ;
+    (* load bvs *)
+    List.iteri
+      (fun i arg ->
+        get_local_or_load oc bvs var_ty_env (id_to_offset arg) i arg)
+      args ;
+    eln oc "call $%s\n" x
 
-  | AppCls(x, args) ->
-    List.iter (get_local_or_load oc bvs var_ty_env) args ;
-    get_local_or_load oc bvs var_ty_env x ;
-    eln oc "call_indirect (type $%s)\n" (TM.find (M.find x var_ty_env) tyidx)
+  | AppCls(x, bargs) ->
+    eln oc ";; AppCls %s\n" x ;
+
+    (* load fv if necessary *)
+    eln oc ";; --- fvs (if necesarry)\n" ;
+    let ty = M.find x var_ty_env in
+    let clsidx = (TM.find (M.find x var_ty_env) tyidx) in
+
+    (
+      match ty with
+      | Fun(args, ret) ->
+        List.iteri
+        (
+          fun i arg ->
+          match ret with
+          | T.Fun(_, _) ->
+              eln oc "(i32.load (i32.const %d))\n"
+                ((id_to_offset x) + (offset_unit * i))
+          | T.Int ->
+              eln oc "(i32.load (i32.load (i32.const %d)))\n"
+                ((id_to_offset x) + (offset_unit * i))
+          | _ ->
+              failwith "AppCls don't know have to deal with: Tx"
+        )
+        args ;
+
+        (* laod bvs *)
+        eln oc ";; --- all bvs\n" ;
+        List.iter
+         (fun fv -> eln oc "(i32.load (i32.const %d))\n" (id_to_offset fv))
+         bargs ;
+
+        eln oc ";; --- funcaddr\n" ;
+        eln oc "(call_indirect (type $%s) (i32.load (i32.const %d)))\n"
+          clsidx
+          ((id_to_offset x) + (offset_unit * (List.length args)))
+        ;
+
+
+      | _ ->
+        failwith "AppCls return has not Fun type..."
+    )
 
   | _ ->
     Printf.eprintf "~~> don't know how to do this yet...\n"
@@ -143,21 +211,6 @@ let emit_sig oc with_label ret_ty args =
       failwith "fundef doesn't have Fun type."
   )
 
-let emit_func oc labidx tyidx clss {
-  name = (Id.Label(label), ret_ty);
-  args;
-  formal_fv;
-  body
-} =
-  let all_args = formal_fv @ args in
-  eln oc "(func $%s " label ;
-  emit_sig oc true ret_ty all_args ;
-  eln oc "\n" ;
-  g 
-    oc (S.of_list (List.map (fun (label, _) -> label) all_args))
-    labidx tyidx clss body ;
-  eln oc ")\n"
-
 let emit_type oc {
   name = (Id.Label(label), ret_ty);
   args;
@@ -168,11 +221,35 @@ let emit_type oc {
   emit_sig oc false ret_ty (formal_fv @ args);
   eln oc "))\n"
 
-let emit_table oc labidx tyidx clss var_ty_env =
-  List.iter (emit_type oc) clss ;
-  List.iter (emit_func oc labidx tyidx var_ty_env) clss ;
-  eln oc "(table %d anyfunc)\n" (List.length clss) ;
-  eln oc "(elem (i32.const 0) 0)\n"
+let emit_func oc labidx tyidx clss {
+  name = (Id.Label(label), ret_ty);
+  args;
+  formal_fv;
+  body
+} =
+  let all_args = formal_fv @ args in
+  (* sig *)
+  eln oc "(type $%s (func " label ;
+  emit_sig oc false ret_ty (formal_fv @ args) ;
+  eln oc "))\n" ;
+  (* body *)
+  eln oc "(func $%s " label ;
+  emit_sig oc true ret_ty all_args ;
+  eln oc "\n" ;
+  g 
+    oc (S.of_list (List.map (fun (label, _) -> label) all_args))
+    labidx tyidx clss body ;
+  eln oc ")\n"
+
+let emit_table oc labidx tyidx fns var_ty_env =
+  (* List.iter (emit_type oc) clss ; *)
+  List.iter (emit_func oc labidx tyidx var_ty_env) fns ;
+  eln oc "(table %d anyfunc)\n" (List.length fns) ;
+  eln oc "(elem (i32.const 0)" ;
+  List.iter
+    (fun i -> eln oc " %s" (string_of_int i))
+    (List.init (List.length fns) (fun i -> i)) ;
+  eln oc ")\n"
 
 let labelindex fns =
   let f = fun i fn -> let Id.Label(lab), ty = fn.name in (lab, (i, ty)) in
@@ -192,16 +269,22 @@ let emit oc (Prog(fundefs, e)) =
   eln oc "(memory $0 1)\n" ;
   eln oc "(export \"memory\" (memory $0))\n" ;
 
-  let clss, fns = seperate_fundefs fundefs in
-  let labidx = labelindex clss in
-  let tyidx = typeindex clss in
-  let var_ty_env = M.empty in
+  (* let clss, fns = seperate_fundefs fundefs in *)
+  (* let labidx = labelindex clss in *)
+  (* let tyidx = typeindex clss in *)
+  let labidx = labelindex fundefs in
+  let tyidx = typeindex fundefs in
+  (* let var_ty_env = M.empty in *)
+  let var_ty_env = M.empty
+  |> M.add_list (
+    List.map (fun fd -> let (Label(label), ty) = fd.name in label, ty) fundefs
+  ) in
 
   eln oc "\n;; table section\n" ;
-  emit_table oc labidx tyidx clss var_ty_env ;
+  emit_table oc labidx tyidx fundefs var_ty_env ;
 
-  eln oc "\n;; function section\n" ;
-  List.iter (emit_func oc labidx tyidx var_ty_env) fns ;
+  (* eln oc "\n;; function section\n" ; *)
+  (* List.iter (emit_func oc labidx tyidx var_ty_env) fns ; *)
 
   eln oc "\n;; start function\n" ;
   eln oc "(func $start (result i32)\n" ;
