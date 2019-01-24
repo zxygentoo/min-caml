@@ -189,9 +189,11 @@ let rec g env known = function
       if is_cls then
         begin
           Format.eprintf "--> making closure `%s`@." x ;
+          (* 
           Format.eprintf
             "==> Cls: %s\n"
             (show_closure { entry = Id.Label(x); actual_fv }) ;
+           *)
           MakeCls((x, t), { entry = Id.Label(x); actual_fv }, e)
         end
       else
