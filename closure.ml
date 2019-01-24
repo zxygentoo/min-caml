@@ -199,7 +199,7 @@ let rec g env known = function
       else
         begin
           Format.eprintf "--> eliminating closure `%s`@." x ;
-          exp'
+          e
         end
     in
     cls_convert_exp exp'
