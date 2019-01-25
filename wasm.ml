@@ -77,17 +77,13 @@ let rec g oc env known = function
 
   | MakeCls((x, t), closure, e) ->
     emit oc ";; MakeCls: %s\n" x ;
-    let env' = M.add x t env in
-    let base_ofst = id2ofst x in
 
-    (* store funaddr *)
     emit oc ";; -- %s: funcaddr\n" x ;
     emit oc "(i32.store (i32.const %d) (i32.const %d))\n"
-      base_ofst (M.find x !fnindex) ;
+      (id2ofst x) (M.find x !fnindex) ;
 
-    (* store fv *)
+    emit oc ";; -- %s: fvs\n" x ;
     let { entry = _entry ; actual_fv } = closure in
-    emit oc ";; -- %s: fv (total: %d) \n" x (List.length actual_fv) ;
     List.iter
       (
         fun fv ->
@@ -97,9 +93,8 @@ let rec g oc env known = function
       )
       (List.rev actual_fv) ;
 
-    (* body *)
     emit oc ";; -- %s: body\n" x ;
-    g oc env' known e
+    g oc (M.add x t env) known e
 
   | AppDir(Id.Label(x), bvs) ->
     emit oc ";; AppDir %s\n" x ;
@@ -110,8 +105,7 @@ let rec g oc env known = function
         then emit oc "    get_local $%s\n" x
         else emit oc "    (i32.load (i32.const %d))\n" (id2ofst bv)
       )
-      bvs
-    ;
+      bvs ;
     emit oc ")\n"
 
   | AppCls(x, bvs) ->
@@ -139,10 +133,10 @@ let emit_param oc with_label (label, ty) =
   then emit oc "(param $%s %s) " label (t2s ty)
   else emit oc "(param %s) " (t2s ty)
 
-let emit_sig oc with_label ret_ty args =
+let emit_sig oc with_label ret args =
   List.iter (emit_param oc with_label) args ;
   (
-    match ret_ty with
+    match ret with
     | T.Fun(_, ret) ->
       emit_result oc ret
 
@@ -150,19 +144,12 @@ let emit_sig oc with_label ret_ty args =
       failwith "fundef doesn't have Fun type."
   )
 
-let emit_func oc {
-  name = (Id.Label(label), ret_ty);
-  args;
-  formal_fv;
-  body
-} =
-  (* sig *)
+let emit_func oc { name = (Id.Label(label), ret); args; formal_fv; body } =
   emit oc "(type $%s (func " label ;
-  emit_sig oc false ret_ty args ;
+  emit_sig oc false ret args ;
   emit oc "))\n" ;
-  (* body *)
   emit oc "(func $%s " label ;
-  emit_sig oc true ret_ty args ;
+  emit_sig oc true ret args ;
   emit oc "\n" ;
   g oc
     (M.add_list (args @ formal_fv) M.empty)
