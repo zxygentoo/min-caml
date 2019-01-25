@@ -54,7 +54,9 @@ let rec shuffle sw xys =
 
 
 let rec g oc = function
-  | dest, Ans(exp) -> g' oc (dest, exp)
+  | dest, Ans(exp) ->
+    g' oc (dest, exp)
+
   | dest, Let((x, _t), exp, e) ->
     g' oc (NonTail(x), exp);
     g oc (dest, e)

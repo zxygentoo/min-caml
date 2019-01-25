@@ -19,17 +19,24 @@ let rec optimize_pass n ast =
 let compile oc buf =
   Id.counter := 0;
   Typing.extenv := M.empty;
-  buf
-  |> Parser.exp Lexer.token
-  |> Typing.infer
-  |> Knormal.normalize
-  |> Alpha.convert
-  |> optimize_pass !max_opt_iter
-  |> Closure.flattern
-  (* |> Virtual.gencode *)
-  (* |> Emit.emitcode oc *)
-  (* |> Wasm.codegen *)
-  |> Wasmit.emit oc
+  let cls_ast = buf
+    |> Parser.exp Lexer.token
+    |> Typing.infer
+    |> Knormal.normalize
+    |> Alpha.convert
+    |> optimize_pass !max_opt_iter
+    |> Closure.flattern
+  in
+  (* x86 assembly code emission *)
+(*   begin
+    cls_ast |> Virtual.gencode |> Emit.emitcode oc
+  end
+ *)
+  (* WebAssembly code emission *)
+  begin
+    ignore (Virtual.gencode cls_ast) ;
+    cls_ast |> Wasmit.emitcode oc
+  end
 
 let compile_string str =
   compile stdout (Lexing.from_string str)
@@ -37,7 +44,6 @@ let compile_string str =
 let compile_file filename =
   let ic = open_in (filename ^ ".ml") in
   let oc = open_out (filename ^ ".wat") in
-  (* let oc = open_out (filename ^ ".wat") in *)
   try
     compile oc (Lexing.from_channel ic);
     close_in ic;

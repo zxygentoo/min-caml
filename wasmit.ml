@@ -105,17 +105,22 @@ let rec g oc bvs labidx tyidx var_ty_env = function
     eln oc ";; %s: fv (total: %d) \n" x (List.length actual_fv) ;
     List.iteri
       (
-        fun i fv ->
-          let ofst = base + offset_unit * i in
+        fun _i fv ->
+          (* let ofst = base + offset_unit * i in *)
 
           if S.mem fv bvs
           then
-            eln oc "(i32.store (i32.const %d) (get_local $%s))\n"
+(*             eln oc "(i32.store (i32.const %d) (get_local $%s))\n"
               ofst fv
+
+ *)     
+             eln oc "get_local $%s\n" fv  
           else
-            eln oc "(i32.store (i32.const %d) (i32.load (i32.const %d)))\n"
+(*             eln oc "(i32.store (i32.const %d) (i32.load (i32.const %d)))\n"
               ofst (id_to_offset fv)
-          ;
+ *)      
+              eln oc "(i32.load (i32.const %d))\n" (id_to_offset fv)
+         ;
       )
       (List.rev actual_fv) ;
 
@@ -126,6 +131,7 @@ let rec g oc bvs labidx tyidx var_ty_env = function
     eln oc "(i32.store (i32.const %d) (i32.const %d))\n" 
       (base + offset_unit * (List.length actual_fv))
       idx ;
+      (* eln oc "i32.const %d\n" idx ; *)
 
     (* body *)
     eln oc ";; %s: body\n" x ;
@@ -151,8 +157,9 @@ let rec g oc bvs labidx tyidx var_ty_env = function
 
     (
       match ty with
-      | Fun(args, ret) ->
-        List.iteri
+      | Fun(args, _ret) ->
+
+(*         List.iteri
         (
           fun i arg ->
           match ret with
@@ -166,7 +173,7 @@ let rec g oc bvs labidx tyidx var_ty_env = function
               failwith "AppCls don't know have to deal with: Tx"
         )
         args ;
-
+ *)
         (* laod bvs *)
         eln oc ";; --- all bvs\n" ;
         List.iter
@@ -177,6 +184,7 @@ let rec g oc bvs labidx tyidx var_ty_env = function
         eln oc "(call_indirect (type $%s) (i32.load (i32.const %d)))\n"
           clsidx
           ((id_to_offset x) + (offset_unit * (List.length args)))
+          (* (id_to_offset x) *)
         ;
 
 
@@ -260,7 +268,7 @@ let typeindex fns =
     (fun acc fd -> let Id.Label(lab), ty = fd.name in TM.add ty lab acc)
     TM.empty fns
 
-let emit oc (Prog(fundefs, e)) =
+let emitcode oc (Prog(fundefs, e)) =
   Format.eprintf "==> generating WebAssembly...@." ;
 
   eln oc "(module\n" ;

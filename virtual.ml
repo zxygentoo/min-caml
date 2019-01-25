@@ -218,8 +218,7 @@ let genfundef {
     Closure.name = (Id.Label(x), t);
     Closure.args;
     Closure.formal_fv;
-    Closure.body;
-    Closure.is_cls = _
+    Closure.body
   } =
   let (int, float) = separate args in
   let (_offset, load) =
@@ -241,9 +240,6 @@ let gencode (Closure.Prog(fundefs, e)) =
   let fundefs = List.map genfundef fundefs in
   let e = g M.empty e in
   let prog = Prog(!data, fundefs, e) in
+  Printf.eprintf "\n==> Asm Prog: \n%s\n" (show_prog prog) ;
   Printf.eprintf "------------------------------\n" ;
-  (* Printf.eprintf "==> Expression: \n%s\n" (show e') ; *)
-  (* Printf.eprintf "==> Expression: \n%s\n" (show e') ; *)
-  (* Printf.eprintf "==> Expression: \n%s\n" (show e') ; *)
-  Printf.eprintf "==> Prog: \n%s\n" (show_prog prog) ;
   prog

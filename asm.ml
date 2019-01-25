@@ -45,8 +45,7 @@ type fundef = {
 
 
 type prog =
-  Prog of (Id.label * float) list * fundef list * t
-  [@@deriving show]
+  Prog of (Id.label * float) list * fundef list * t [@@deriving show]
 
 
 let fletd(x, e1, e2) = Let((x, Type.Float), e1, e2)
