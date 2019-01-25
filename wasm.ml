@@ -26,7 +26,7 @@ let id2ofst id =
     |> List.hd
     |> int_of_string
   in
-  uid * ofst_unit
+  ofst_unit * uid
 
 let rec g oc env known = function
   | Unit ->
@@ -160,7 +160,6 @@ let emit_func oc {
   emit oc "(type $%s (func " label ;
   emit_sig oc false ret_ty args ;
   emit oc "))\n" ;
-
   (* body *)
   emit oc "(func $%s " label ;
   emit_sig oc true ret_ty args ;
@@ -171,8 +170,10 @@ let emit_func oc {
     body ;
   emit oc ")\n"
 
+let emit_funcs oc fns =
+    List.iter (emit_func oc) fns
+
 let emit_table oc fns =
-  List.iter (emit_func oc) fns ;
   emit oc "(table %d anyfunc)\n" (List.length fns) ;
   emit oc "(elem (i32.const 0)" ;
   List.iter
@@ -193,27 +194,23 @@ let emitcode oc (Prog(fundefs, e)) =
     (fun idx fd -> let (Id.Label(label), t) = fd.name in TM.add t label idx)
     !tyindex fundefs ;
 
-  emit oc "(module\n" ;
-
-  emit oc "\n;; memory section\n" ;
-  emit oc "(memory $0 1)\n" ;
-  emit oc "(export \"memory\" (memory $0))\n" ;
-
-  emit oc "\n;; table section\n" ;
-  emit_table oc fundefs ;
-
-  emit oc "\n;; start function\n" ;
-  emit oc "(func $start (result i32)\n" ;
-
   let env = M.add_list
     (List.map (fun fd -> let Id.Label(label), t = fd.name in (label, t)) fundefs)
     M.empty
   in
 
+  emit oc "(module\n" ;
+  emit oc ";; memory section\n" ;
+  emit oc "(memory $0 1)\n" ;
+  emit oc "(export \"memory\" (memory $0))\n" ;
+  emit oc ";; functions\n" ;
+  emit_funcs oc fns ;
+  emit oc ";; table section\n" ;
+  emit_table oc fundefs ;
+  emit oc ";; start function\n" ;
+  emit oc "(func $start (result i32)\n" ;
   g oc env S.empty e ;
   emit oc ")\n" ;
-
-  emit oc "\n;; export start\n" ;
+  emit oc "\n;; export start function\n" ;
   emit oc "(export \"start\" (func $start))\n" ;
-
   emit oc ")\n";
