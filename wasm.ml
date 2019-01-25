@@ -58,9 +58,7 @@ let rec g oc env known = function
           then emit oc "get_local $%s\n" v
           else emit oc "(i32.load (i32.const %d))\n" (id2ofst v)
       )
-      [x; y]
-      (* [y; x] *)
-    ;
+      [x; y] ;
     emit oc "i32.sub\n"
 
   | Let((x, t), e1, e2) ->
@@ -94,14 +92,8 @@ let rec g oc env known = function
       (
         fun fv ->
           let ofst = id2ofst fv in
-          if S.mem fv known
-          then
+          if S.mem fv known then
             emit oc "(i32.store (i32.const %d) (get_local $%s))\n" ofst fv
-          else
-            ()
-            (* emit oc *)
-              (* "(i32.store (i32.const %d) (i32.load (i32.const %d)))\n" *)
-              (* ofst (id2ofst fv) *)
       )
       (List.rev actual_fv) ;
 
