@@ -17,7 +17,7 @@ let tyindex = ref TM.empty
 let emit = Printf.fprintf
 
 (* now we only dealing with i32 consts and memory address, so all 4 bytes *)
-let ofst_unit = 16
+let ofst_unit = 4
 
 let id2ofst id =
   let uid = id
