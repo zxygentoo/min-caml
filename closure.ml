@@ -228,6 +228,6 @@ let flattern e =
   toplevel := [];
   let e' = g M.empty S.empty e in
   let prog = Prog(List.rev !toplevel, e') in
-  Printf.eprintf "\n==> Clourse Prog: \n%s\n" (show_prog prog) ;
   Printf.eprintf "------------------------------\n" ;
+  Printf.eprintf "==> Clourse Prog: \n%s\n" (show_prog prog) ;
   prog

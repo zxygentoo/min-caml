@@ -101,37 +101,38 @@ let rec g oc bvs labidx tyidx var_ty_env = function
     let var_ty_env' = M.add x t var_ty_env in
     let base = id_to_offset x in
 
-    (* store fv *)
-    eln oc ";; %s: fv (total: %d) \n" x (List.length actual_fv) ;
-    List.iteri
-      (
-        fun _i fv ->
-          (* let ofst = base + offset_unit * i in *)
-
-          if S.mem fv bvs
-          then
-(*             eln oc "(i32.store (i32.const %d) (get_local $%s))\n"
-              ofst fv
-
- *)     
-             eln oc "get_local $%s\n" fv  
-          else
-(*             eln oc "(i32.store (i32.const %d) (i32.load (i32.const %d)))\n"
-              ofst (id_to_offset fv)
- *)      
-              eln oc "(i32.load (i32.const %d))\n" (id_to_offset fv)
-         ;
-      )
-      (List.rev actual_fv) ;
-
     (* store funaddr *)
     eln oc ";; %s: funcaddr\n" x ;
     let Id.Label(label) = entry in
     let idx, _ty = (M.find label labidx) in
     eln oc "(i32.store (i32.const %d) (i32.const %d))\n" 
-      (base + offset_unit * (List.length actual_fv))
-      idx ;
+      base idx ;
+      (* (base + offset_unit * (List.length actual_fv)) *)
+      (* idx ; *)
       (* eln oc "i32.const %d\n" idx ; *)
+
+    (* store fv *)
+    eln oc ";; %s: fv (total: %d) \n" x (List.length actual_fv) ;
+    List.iteri
+      (
+        fun i fv ->
+          let ofst = base + offset_unit * succ i in
+
+          if S.mem fv bvs
+          then
+            eln oc "(i32.store (i32.const %d) (get_local $%s))\n"
+              ofst fv
+
+     
+             (* eln oc "get_local $%s\n" fv   *)
+          else
+            eln oc "(i32.store (i32.const %d) (i32.load (i32.const %d)))\n"
+              ofst (id_to_offset fv)
+      
+              (* eln oc "(i32.load (i32.const %d))\n" (id_to_offset fv) *)
+         ;
+      )
+      (List.rev actual_fv) ;
 
     (* body *)
     eln oc ";; %s: body\n" x ;
@@ -157,34 +158,34 @@ let rec g oc bvs labidx tyidx var_ty_env = function
 
     (
       match ty with
-      | Fun(args, _ret) ->
+      | Fun(args, ret) ->
 
-(*         List.iteri
+        List.iteri
         (
-          fun i arg ->
+          fun i _arg ->
           match ret with
           | T.Fun(_, _) ->
               eln oc "(i32.load (i32.const %d))\n"
-                ((id_to_offset x) + (offset_unit * i))
+                ((id_to_offset x) + (offset_unit * succ i))
           | T.Int ->
               eln oc "(i32.load (i32.load (i32.const %d)))\n"
-                ((id_to_offset x) + (offset_unit * i))
+                ((id_to_offset x) + (offset_unit * succ i))
           | _ ->
               failwith "AppCls don't know have to deal with: Tx"
         )
         args ;
- *)
+
         (* laod bvs *)
         eln oc ";; --- all bvs\n" ;
         List.iter
-         (fun fv -> eln oc "(i32.load (i32.const %d))\n" (id_to_offset fv))
+         (fun bv -> eln oc "(i32.load (i32.const %d))\n" (id_to_offset bv))
          bargs ;
 
         eln oc ";; --- funcaddr\n" ;
         eln oc "(call_indirect (type $%s) (i32.load (i32.const %d)))\n"
           clsidx
-          ((id_to_offset x) + (offset_unit * (List.length args)))
-          (* (id_to_offset x) *)
+          (* ((id_to_offset x) + (offset_unit * (List.length args))) *)
+          (id_to_offset x)
         ;
 
 
