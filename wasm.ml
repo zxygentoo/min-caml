@@ -162,11 +162,8 @@ let emit_funcs oc fns =
 
 let emit_table oc fns =
   emit oc "(table %d anyfunc)\n" (List.length fns) ;
-  emit oc "(elem (i32.const 0)" ;
-  List.iter
-    (fun i -> emit oc " %s" (string_of_int i))
-    (List.init (List.length fns) (fun i -> i)) ;
-  emit oc ")\n"
+  emit oc "(elem (i32.const 0) %s)"
+    (Id.pp_list (List.init (List.length fns) (fun i -> string_of_int i)))
 
 let emitcode oc (Prog(fundefs, e)) =
   Format.eprintf "==> generating WebAssembly...@." ;
