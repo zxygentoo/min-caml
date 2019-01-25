@@ -103,15 +103,16 @@ let rec g oc env known = function
 
   | AppDir(Id.Label(x), bvs) ->
     emit oc ";; AppDir %s\n" x ;
+    emit oc "(call $%s\n" x ;
     List.iter
       (fun bv ->
         if S.mem bv known
-        then emit oc "get_local $%s\n" x
-        else emit oc "(i32.load (i32.const %d))\n" (id2ofst bv)
+        then emit oc "    get_local $%s\n" x
+        else emit oc "    (i32.load (i32.const %d))\n" (id2ofst bv)
       )
       bvs
     ;
-    emit oc "call $%s\n" x
+    emit oc ")\n"
 
   | AppCls(x, bvs) ->
     emit oc ";; AppCls %s\n" x ;
