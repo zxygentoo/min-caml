@@ -1,129 +1,226 @@
-module C = Closure
+open Closure
 
-type t =
-  | Asm of exp
-  | Let of (Id.t * Type.t) * exp * t
+module T = Type
 
-and exp =
-  | Comment of string
-  | Nop
-  | Int of int
-  (* | Float of float *)
-  (* | Neg of Id.t *)
-  | Add of Id.t * Id.t
-  (* | Sub of Id.t * Id.t *)
-  (* | FSub of Id.t * Id.t *)
-  (* | FMul of Id.t * Id.t *)
-  (* | FDiv of Id.t * Id.t *)
-  | MakeCls of (Id.t * Type.t) * closure * t
-  | Call of Id.t * Id.t list * Id.t list
-  | CallInDir of Id.label * Id.t list * Id.t list
-
-and closure = {
-  entry : Id.label;
-  actual_fv : Id.t list;
-}
-
-type fundef = {
-  name : Id.label * Type.t;
-  args : (Id.t * Type.t) list;
-  formal_fv : (Id.t * Type.t) list;
-  body : t;
-  (* ret : Type.t *)
-}
-
-type prog = Prog of fundef list * t
+module TM = Map.Make(
+  struct
+    type t = Type.t
+    let compare = compare
+  end
+)
 
 
-let g _env = function
-  | C.Unit ->
-    Asm(Nop)
+let fnindex = ref M.empty
 
-  | C.Int(i) ->
-    Asm(Int(i))
+let tyindex = ref TM.empty
 
-  | C.Float(_a) ->
-    Asm(Nop)
+let emit = Printf.fprintf
 
-  | C.Neg(_) ->
-    Asm(Nop)
+(* now we only dealing with i32 consts and memory address, so all 4 bytes *)
+let ofst_unit = 16
 
-  | C.Add(x, y) ->
-    Asm(Add(x, y))
+let id2ofst id =
+  let uid = id
+    |> String.split_on_char '.'
+    |> List.rev
+    |> List.hd
+    |> int_of_string
+  in
+  uid * ofst_unit
 
-  | C.Sub(_, _) ->
-    Asm(Nop)
+let rec g oc env known = function
+  | Unit ->
+    ()
 
-  | C.FNeg(_) ->
-    Asm(Nop)
+  | Int(i) ->
+    emit oc ";; Int(%d)\n" i ;
+    emit oc "i32.const %d\n" i
 
-  | C.FAdd(_, _) ->
-    Asm(Nop)
+  | Add(x, y) ->
+    emit oc ";; Add %s %s\n" x y ;
+    List.iter
+      (
+        fun v ->
+          if S.mem v known
+          then emit oc "get_local $%s\n" v
+          else emit oc "(i32.load (i32.const %d))\n" (id2ofst v)
+      )
+      [x; y]
+    ;
+    emit oc "i32.add\n"
 
-  | C.FSub(_, _) ->
-    Asm(Nop)
+  | Sub(x, y) ->
+    emit oc ";; Sub %s %s\n" x y ;
+    List.iter
+      (
+        fun v ->
+          if S.mem v known
+          then emit oc "get_local $%s\n" v
+          else emit oc "(i32.load (i32.const %d))\n" (id2ofst v)
+      )
+      [x; y]
+      (* [y; x] *)
+    ;
+    emit oc "i32.sub\n"
 
-  | C.FMul(_, _) ->
-    Asm(Nop)
+  | Let((x, t), e1, e2) ->
+    emit oc ";; Let %s\n" x ;
+    let env' = M.add x t env in
+    emit oc "i32.const %d\n" (id2ofst x) ;
+    g oc env known e1 ;
+    emit oc "i32.store\n" ;
+    g oc env' known e2
 
-  | C.FDiv(_, _) ->
-    Asm(Nop)
+  | Var(x) ->
+    emit oc ";; Var(%s)\n" x ;
+    if S.mem x known
+    then emit oc "get_local $%s\n" x
+    else emit oc "(i32.load (i32.const %d))\n" (id2ofst x)
 
-  | C.IfEq(_, _, _, _) ->
-    Asm(Nop)
+  | MakeCls((x, t), closure, e) ->
+    emit oc ";; MakeCls: %s\n" x ;
+    let env' = M.add x t env in
+    let base_ofst = id2ofst x in
 
-  | C.IfLE(_, _, _, _) ->
-    Asm(Nop)
+    (* store funaddr *)
+    emit oc ";; -- %s: funcaddr\n" x ;
+    emit oc "(i32.store (i32.const %d) (i32.const %d))\n"
+      base_ofst (M.find x !fnindex) ;
 
-  | C.Let((_, _), _, _) ->
-    Asm(Nop)
+    (* store fv *)
+    let { entry = _entry ; actual_fv } = closure in
+    emit oc ";; -- %s: fv (total: %d) \n" x (List.length actual_fv) ;
+    List.iter
+      (
+        fun fv ->
+          let ofst = id2ofst fv in
+          if S.mem fv known
+          then
+            emit oc "(i32.store (i32.const %d) (get_local $%s))\n" ofst fv
+          else
+            ()
+            (* emit oc *)
+              (* "(i32.store (i32.const %d) (i32.load (i32.const %d)))\n" *)
+              (* ofst (id2ofst fv) *)
+      )
+      (List.rev actual_fv) ;
 
-  | C.Var(_) ->
-    Asm(Nop)
+    (* body *)
+    emit oc ";; -- %s: body\n" x ;
+    g oc env' known e
 
-  | C.MakeCls((_x, _t), { C.entry = _; C.actual_fv = _ }, _e) ->
-    Asm(Nop)
+  | AppDir(Id.Label(x), bvs) ->
+    emit oc ";; AppDir %s\n" x ;
+    List.iter
+      (fun bv ->
+        if S.mem bv known
+        then emit oc "get_local $%s\n" x
+        else emit oc "(i32.load (i32.const %d))\n" (id2ofst bv)
+      )
+      bvs
+    ;
+    emit oc "call $%s\n" x
 
-  | C.AppCls(_, _) ->
-    Asm(Nop)
+  | AppCls(x, bvs) ->
+    emit oc ";; AppCls %s\n" x ;
 
-  | C.AppDir(_, _) ->
-    Asm(Nop)
+    emit oc ";; AppCls %s --- bvs\n" x ;
+    List.iter
+      (fun bv -> emit oc "(i32.load (i32.const %d))\n" (id2ofst bv)) bvs ;
+    emit oc "(call_indirect (type $%s) (i32.load (i32.const %d)))\n"
+      (TM.find (M.find x env) !tyindex) (id2ofst x)
 
-  | C.Tuple(_) ->
-    Asm(Nop)
+  | _ ->
+    failwith "~~> don't know how to compile this yet...\n"
 
-  | C.LetTuple(_, _, _) ->
-    Asm(Nop)
+let t2s = function
+  | T.Int -> "i32"
+  | T.Fun(_) -> "i32"
+  | _ -> failwith "don't know how to deal with this yet..."
 
-  | C.Get(_, _) ->
-    Asm(Nop)
+let emit_result oc ty =
+  emit oc "(result %s)" (t2s ty)
 
-  | C.Put(_, _, _) ->
-    Asm(Nop)
+let emit_param oc with_label (label, ty) =
+  if with_label
+  then emit oc "(param $%s %s) " label (t2s ty)
+  else emit oc "(param %s) " (t2s ty)
 
-  | C.ExtArray(_) ->
-    Asm(Nop)
+let emit_sig oc with_label ret_ty args =
+  List.iter (emit_param oc with_label) args ;
+  (
+    match ret_ty with
+    | T.Fun(_, ret) ->
+      emit_result oc ret
 
-
-let genfundef {
-  C.name = (Id.Label(x), t);
-  C.args = args;
-  C.formal_fv = formal_fv;
-  C.body = body;
-  C.is_cls = _
-} = {
-  name = (Id.Label(x), t);
-  args = args;
-  formal_fv = formal_fv;
-  body = g
-    (M.empty |> M.add_list formal_fv |> M.add_list args |> M.add x t) body;
-  (* ret = Type.Int *)
-}
-
-
-let codegen (C.Prog(fundefs, e)) =
-  Prog(
-    List.map genfundef fundefs,
-    g M.empty e
+    | _ ->
+      failwith "fundef doesn't have Fun type."
   )
+
+let emit_func oc {
+  name = (Id.Label(label), ret_ty);
+  args;
+  formal_fv;
+  body
+} =
+  (* sig *)
+  emit oc "(type $%s (func " label ;
+  emit_sig oc false ret_ty args ;
+  emit oc "))\n" ;
+
+  (* body *)
+  emit oc "(func $%s " label ;
+  emit_sig oc true ret_ty args ;
+  emit oc "\n" ;
+  g oc
+    (M.add_list (args @ formal_fv) M.empty)
+    (S.of_list (List.map (fun (label, _) -> label) args))
+    body ;
+  emit oc ")\n"
+
+let emit_table oc fns =
+  List.iter (emit_func oc) fns ;
+  emit oc "(table %d anyfunc)\n" (List.length fns) ;
+  emit oc "(elem (i32.const 0)" ;
+  List.iter
+    (fun i -> emit oc " %s" (string_of_int i))
+    (List.init (List.length fns) (fun i -> i)) ;
+  emit oc ")\n"
+
+let emitcode oc (Prog(fundefs, e)) =
+  Format.eprintf "==> generating WebAssembly...@." ;
+
+  fnindex := M.add_list
+    (List.mapi
+        (fun i fd -> let (Id.Label(label), _) = fd.name in label, i)
+        fundefs)
+    !fnindex ;
+
+  tyindex := List.fold_left
+    (fun idx fd -> let (Id.Label(label), t) = fd.name in TM.add t label idx)
+    !tyindex fundefs ;
+
+  emit oc "(module\n" ;
+
+  emit oc "\n;; memory section\n" ;
+  emit oc "(memory $0 1)\n" ;
+  emit oc "(export \"memory\" (memory $0))\n" ;
+
+  emit oc "\n;; table section\n" ;
+  emit_table oc fundefs ;
+
+  emit oc "\n;; start function\n" ;
+  emit oc "(func $start (result i32)\n" ;
+
+  let env = M.add_list
+    (List.map (fun fd -> let Id.Label(label), t = fd.name in (label, t)) fundefs)
+    M.empty
+  in
+
+  g oc env S.empty e ;
+  emit oc ")\n" ;
+
+  emit oc "\n;; export start\n" ;
+  emit oc "(export \"start\" (func $start))\n" ;
+
+  emit oc ")\n";

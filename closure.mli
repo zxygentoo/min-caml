@@ -1,3 +1,8 @@
+type closure = {
+  entry : Id.label;
+  actual_fv : Id.t list;
+}
+
 type t =
   | Unit
   | Int of int
@@ -22,11 +27,6 @@ type t =
   | Get of Id.t * Id.t
   | Put of Id.t * Id.t * Id.t
   | ExtArray of Id.label
-
-and closure = {
-  entry : Id.label;
-  actual_fv : Id.t list;
-}
 
 type fundef = {
   name : Id.label * Type.t;

@@ -13,7 +13,8 @@
     (preprocess (pps ppx_deriving.std))
 ;    (modules (:standard \ comp wasm wasmit)))
 ;    (modules (:standard \ comp wasm virtual simm regalloc asm)))
-    (modules (:standard \ comp wasm emit)))
+;    (modules (:standard \ comp wasm emit)))
+    (modules (:standard \ comp wasmit emit)))
 
 (ocamllex lexer)
 (ocamlyacc parser)

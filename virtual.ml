@@ -240,6 +240,6 @@ let gencode (Closure.Prog(fundefs, e)) =
   let fundefs = List.map genfundef fundefs in
   let e = g M.empty e in
   let prog = Prog(!data, fundefs, e) in
-  Printf.eprintf "\n==> Asm Prog: \n%s\n" (show_prog prog) ;
   Printf.eprintf "------------------------------\n" ;
+  Printf.eprintf "==> Asm Prog: \n%s\n" (show_prog prog) ;
   prog
