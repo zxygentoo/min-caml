@@ -188,7 +188,7 @@ let emitcode oc (Prog(fundefs, e)) =
   emit oc "(memory $0 1)\n" ;
   emit oc "(export \"memory\" (memory $0))\n" ;
   emit oc ";; functions\n" ;
-  emit_funcs oc fns ;
+  emit_funcs oc fundefs ;
   emit oc ";; table section\n" ;
   emit_table oc fundefs ;
   emit oc ";; start function\n" ;
