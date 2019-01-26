@@ -135,14 +135,13 @@ let emit_param oc with_label (label, ty) =
 
 let emit_sig oc with_label ret args =
   List.iter (emit_param oc with_label) args ;
-  (
-    match ret with
-    | T.Fun(_, ret) ->
-      emit_result oc ret
+  begin match ret with
+  | T.Fun(_, ret) ->
+    emit_result oc ret
 
-    | _ ->
-      failwith "fundef doesn't have Fun type."
-  )
+  | _ ->
+    failwith "fundef doesn't have Fun type."
+  end
 
 let emit_func oc { name = (Id.Label(label), ret); args; formal_fv; body } =
   emit oc "(type $%s (func " label ;
