@@ -133,22 +133,22 @@ let emit_param oc with_label (label, ty) =
   then emit oc "(param $%s %s) " label (t2s ty)
   else emit oc "(param %s) " (t2s ty)
 
-let emit_sig oc with_label ret args =
+let emit_sig oc with_label ty args =
   List.iter (emit_param oc with_label) args ;
-  begin match ret with
+  begin match ty with
   | T.Fun(_, ret) ->
-    emit_result oc ret
+    emit_result oc ty
 
   | _ ->
     failwith "fundef doesn't have Fun type."
   end
 
-let emit_func oc { name = (Id.Label(label), ret); args; formal_fv; body } =
+let emit_func oc { name = (Id.Label(label), ty); args; formal_fv; body } =
   emit oc "(type $%s (func " label ;
-  emit_sig oc false ret args ;
+  emit_sig oc false ty args ;
   emit oc "))\n" ;
   emit oc "(func $%s " label ;
-  emit_sig oc true ret args ;
+  emit_sig oc true ty args ;
   emit oc "\n" ;
   g oc
     (M.add_list (args @ formal_fv) M.empty)
