@@ -76,17 +76,18 @@ let rec g oc env known = function
     else emit oc "(i32.load (i32.const %d))\n" (id2ofst x)
 
   | MakeCls((x, t), closure, e) ->
-    emit oc ";; MakeCls: %s\n" x ;
+    emit oc ";; MakeCls %s\n" x ;
 
-    emit oc ";; -- %s: funcaddr\n" x ;
+    emit oc ";; MakeCls %s --- funcaddr\n" x ;
     emit oc "(i32.store (i32.const %d) (i32.const %d))\n"
       (id2ofst x) (M.find x !fnindex) ;
 
-    emit oc ";; -- %s: fvs\n" x ;
+    emit oc ";; MakeCls %s -- fvs\n" x ;
     let { entry = _entry ; actual_fv } = closure in
     List.iter
       (
         fun fv ->
+          emit oc ";; MakeCls %s --- fv: %s\n" x fv ;
           let ofst = id2ofst fv in
           if S.mem fv known then
             emit oc "(i32.store (i32.const %d) (get_local $%s))\n" ofst fv
@@ -101,6 +102,7 @@ let rec g oc env known = function
     emit oc "(call $%s\n" x ;
     List.iter
       (fun bv ->
+        emit oc "    ;; AppDir %s --- bv: %s\n" x bv ;
         if S.mem bv known
         then emit oc "    get_local $%s\n" x
         else emit oc "    (i32.load (i32.const %d))\n" (id2ofst bv)
@@ -113,7 +115,13 @@ let rec g oc env known = function
 
     emit oc ";; AppCls %s --- bvs\n" x ;
     List.iter
-      (fun bv -> emit oc "(i32.load (i32.const %d))\n" (id2ofst bv)) bvs ;
+      (
+        fun bv ->
+          emit oc ";; AppCls %s --- bv: %s\n" x bv ;
+          if S.mem bv known
+          then emit oc "(get_local $%s)\n" bv
+          else emit oc "(i32.load (i32.const %d))\n" (id2ofst bv)
+      ) bvs ;
     emit oc "(call_indirect (type $%s) (i32.load (i32.const %d)))\n"
       (TM.find (M.find x env) !tyindex) (id2ofst x)
 
@@ -158,11 +166,11 @@ let emit_func oc { name = (Id.Label(label), ret); args; formal_fv; body } =
   emit oc ")\n"
 
 let emit_funcs oc fns =
-    List.iter (emit_func oc) fns
+    List.iter (fun fn -> emit_func oc fn ; emit oc "\n") fns
 
 let emit_table oc fns =
   emit oc "(table %d anyfunc)\n" (List.length fns) ;
-  emit oc "(elem (i32.const 0) %s)"
+  emit oc "(elem (i32.const 0) %s)\n"
     (Id.pp_list (List.init (List.length fns) (fun i -> string_of_int i)))
 
 let emitcode oc (Prog(fundefs, e)) =
@@ -184,14 +192,14 @@ let emitcode oc (Prog(fundefs, e)) =
   in
 
   emit oc "(module\n" ;
-  emit oc ";; memory section\n" ;
+  emit oc "\n;; memory section\n" ;
   emit oc "(memory $0 1)\n" ;
   emit oc "(export \"memory\" (memory $0))\n" ;
-  emit oc ";; functions\n" ;
+  emit oc "\n;; functions\n" ;
   emit_funcs oc fundefs ;
-  emit oc ";; table section\n" ;
+  emit oc "\n;; table section\n" ;
   emit_table oc fundefs ;
-  emit oc ";; start function\n" ;
+  emit oc "\n;; start function\n" ;
   emit oc "(func $start (result i32)\n" ;
   g oc env S.empty e ;
   emit oc ")\n" ;

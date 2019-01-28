@@ -172,7 +172,7 @@ let rec g env known = function
     let actual_fv =
       S.elements (S.diff (free_vars body') (S.add x (args_fv args))) in
     let formal_fv =
-      List.map (fun z -> (z, M.find z env')) actual_fv in
+      List.map (fun fv -> (fv, M.find fv env')) actual_fv in
     let exp' = g env' known' exp in
     let is_cls = S.mem x (free_vars exp') in
 
