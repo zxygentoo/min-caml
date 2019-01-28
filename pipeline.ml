@@ -34,7 +34,7 @@ let compile oc buf =
  *)
   (* WebAssembly code emission *)
   begin
-    ignore (Virtual.gencode cls_ast) ;
+    (* ignore (Virtual.gencode cls_ast) ; *)
     (* cls_ast |> Wasmit.emitcode oc *)
     cls_ast |> Wasm.emitcode oc
   end

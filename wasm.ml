@@ -75,7 +75,7 @@ let rec g oc env known = function
     then emit oc "get_local $%s\n" x
     else emit oc "(i32.load (i32.const %d))\n" (id2ofst x)
 
-  | MakeCls((x, t), closure, e) ->
+  | MakeCls((x, t), { entry = _entry ; actual_fv }, e) ->
     emit oc ";; MakeCls %s\n" x ;
 
     emit oc ";; MakeCls %s --- funcaddr\n" x ;
@@ -83,7 +83,6 @@ let rec g oc env known = function
       (id2ofst x) (M.find x !fnindex) ;
 
     emit oc ";; MakeCls %s -- fvs\n" x ;
-    let { entry = _entry ; actual_fv } = closure in
     List.iter
       (
         fun fv ->
