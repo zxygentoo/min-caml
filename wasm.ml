@@ -47,9 +47,9 @@ let t2ofst = function
 
 let emit = Printf.fprintf
 
-let local_or_fvs oc known fvars id =
+let local_or_fvs oc known fvars ident id =
   if S.mem id known
-  then emit oc "get_local $%s\n" id
+  then emit oc "%s(get_local $%s)\n" ident id
   else begin
     Format.eprintf "--> id not in known, assuming env fv@." ;
     ignore (List.find (fun (x, _) -> x = id) fvars) ;
@@ -57,7 +57,8 @@ let local_or_fvs oc known fvars id =
       (
         fun i (x, _t) ->
           if x = id then
-            emit oc "(i32.load (i32.add (i32.const %d) (get_local 0)))\n" (i*4)
+            emit oc "%s(i32.load (i32.add (i32.const %d) (get_local 0)))\n"
+              ident (i*4)
       )
       fvars
   end
@@ -69,30 +70,38 @@ let rec g oc env known fvars = function
 
   | Int(i) ->
     emit oc ";; Int(%d)\n" i ;
-    emit oc "i32.const %d\n" i
+    emit oc "(i32.const %d)\n" i
 
   | Add(x, y) ->
     emit oc ";; Add %s %s\n" x y ;
-    List.iter (local_or_fvs oc known fvars) [x; y] ;
-    emit oc "i32.add\n"
+    emit oc "(i32.add\n" ;
+    List.iter (local_or_fvs oc known fvars "\t") [x; y] ;
+    emit oc ")\n"
 
   | Sub(x, y) ->
     emit oc ";; Sub %s %s\n" x y ;
-    List.iter (local_or_fvs oc known fvars) [x; y] ;
-    emit oc "i32.sub\n"
+    emit oc "(i32.sub\n" ;
+    List.iter (local_or_fvs oc known fvars "\t") [x; y] ;
+    emit oc ")\n"
+
+(*   | IfLE(x, y, e1, e2) ->
+    emit oc ";; IfLE(%s, %s, _, _)\n" x y ;
+    ()
+ *)
 
   | Let((x, t), e1, e2) ->
     emit oc ";; Let %s\n" x ;
     let env' = M.add x t env in
     let known' = S.add x known in
+    (* g oc env known fvars e1 ; *)
+    emit oc "(set_local $%s\n" x ;
     g oc env known fvars e1 ;
-    emit oc "set_local $%s\n" x ;
+    emit oc ")\n" ;
     g oc env' known' fvars e2
 
   | Var(x) ->
     emit oc ";; Var(%s)\n" x ;
-    local_or_fvs oc known fvars x
-
+    local_or_fvs oc known fvars "" x
 
   | MakeCls((x, t), { entry = Id.Label(fn_lab) ; actual_fv }, e) ->
     emit oc ";; MakeCls %s\n" x ;
@@ -112,9 +121,10 @@ let rec g oc env known fvars = function
       (
         fun i fv ->
           emit oc ";; MakeCls %s --- fv: %s\n" x fv ;
-          emit oc "(i32.add (i32.const %d) (get_global $HP))\n" ((i+1)*4) ;
-          local_or_fvs oc known fvars fv ;
-          emit oc "i32.store\n"
+          emit oc "(i32.store\n" ;
+          emit oc "\t(i32.add (i32.const %d) (get_global $HP))\n" ((i+1)*4) ;
+          local_or_fvs oc known fvars "\t" fv ;
+          emit oc ")\n"
       )
       actual_fv ;
 
@@ -130,39 +140,40 @@ let rec g oc env known fvars = function
 
   | AppDir(Id.Label(x), bvs) ->
     emit oc ";; AppDir %s\n" x ;
+    emit oc "(call $%s\n" x ;
     (* fake env *)
-    emit oc "i32.const -10000" ;
+    emit oc "\t(i32.const -10000)\n" ;
     List.iter
       (fun bv ->
         emit oc ";; AppDir %s --- bv: %s\n" x bv ;
-        local_or_fvs oc known fvars bv
+        local_or_fvs oc known fvars "\t" bv
       )
       bvs ;
-    emit oc "(call $%s)\n" x
+    emit oc ")\n" 
 
   | AppCls(x, bvs) ->
     emit oc ";; AppCls %s\n" x ;
 
     emit oc ";; AppCls %s --- fvs env\n" x ;
-    emit oc "i32.const 4\n" ;
-    local_or_fvs oc known fvars x ;
-    emit oc "i32.add\n" ;
+    emit oc "(i32.add\n" ;
+    emit oc "(i32.const 4)\n" ;
+    local_or_fvs oc known fvars "\t" x ;
+    emit oc ")\n" ;
 
-    emit oc ";; AppCls %s --- bvs\n" x ;
     List.iter
       (
         fun bv ->
           emit oc ";; AppCls %s --- bv: %s\n" x bv ;
-          local_or_fvs oc known fvars bv
+          local_or_fvs oc known fvars "" bv
       ) bvs ;
 
     emit oc ";; AppCls %s --- codeptr\n" x ;
-    local_or_fvs oc known fvars x ;
-    emit oc "i32.load\n" ;
+    local_or_fvs oc known fvars "" x ;
+    emit oc "(i32.load)\n" ;
     emit oc ";; AppCls %s -- indirect call\n" x;
-    emit oc ";; find ty\n" ;
+    (* emit oc ";; find ty\n" ; *)
     let ty = M.find x env in
-    emit oc ";; find ty label\n" ;    
+    (* emit oc ";; find ty label\n" ;     *)
     let ty_lab = TM.find ty !tyindex in
     emit oc "(call_indirect (type $%s))\n" ty_lab
 
