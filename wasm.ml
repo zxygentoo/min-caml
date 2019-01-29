@@ -143,7 +143,7 @@ let emit_param oc with_label (label, ty) =
 let emit_sig oc with_label ty args =
   List.iter (emit_param oc with_label) args ;
   begin match ty with
-  | T.Fun(_, ret) ->
+  | T.Fun(_, ty) ->
     emit_result oc ty
 
   | _ ->
