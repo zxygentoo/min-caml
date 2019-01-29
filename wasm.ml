@@ -20,7 +20,7 @@ let t2s = function
 
 let rec local_vars = function
   | Let((x, t), e1, e2) ->
-      (x, t) :: (local_vars e1) @ (local_vars e2)
+    (x, t) :: (local_vars e1) @ (local_vars e2)
 
   | MakeCls((x, t), _, e) ->
     (x, t) :: (local_vars e)
@@ -71,6 +71,10 @@ let rec g oc env known fvars = function
   | Int(i) ->
     emit oc ";; Int(%d)\n" i ;
     emit oc "(i32.const %d)\n" i
+
+  | Float(a) ->
+    emit oc ";; Float(%f)\n" a ;
+    emit oc "(f32.const %f)" a
 
   | Add(x, y) ->
     emit oc ";; Add %s %s\n" x y ;
