@@ -15,6 +15,7 @@ let tyindex = ref TM.empty
 
 let t2s = function
   | T.Int -> "i32"
+  | T.Float -> "f32"
   | T.Fun(_) -> "i32"
   | _ -> failwith "don't know how to deal with this yet..."
 
