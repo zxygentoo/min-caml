@@ -117,7 +117,7 @@ let rec g oc env known fvars = function
     let env' = M.add x t env in
     let known' = S.add x known in
 
-    emit oc ";; MakeCls %s --- codeptr\n" x ;
+    emit oc ";; MakeCls %s --- store codeptr\n" x ;
     emit oc "(i32.store (get_global $HP) (i32.const %d))\n"
       (M.find fn_lab !fnindex) ;
 
@@ -133,14 +133,14 @@ let rec g oc env known fvars = function
       )
       actual_fv ;
 
-    emit oc ";; -- %s: codeptr\n" x ;
+    emit oc ";; MakeCls %s --- return codeptr\n" x ;
     emit oc "(set_local $%s (get_global $HP))\n" x ;
 
     let alloc = List.fold_left (fun acc x -> acc + x) 0 offest_list + 4 in
     emit oc "(set_global $HP (i32.add (i32.const %d) (get_global $HP)))\n"
       alloc ;
 
-    emit oc ";; -- %s: body\n" x ;
+    emit oc ";; MakeCls %s --- body\n" x ;
     g oc env' known' fvars e
 
   | AppDir(Id.Label(x), bvs) ->
@@ -266,7 +266,7 @@ let emitcode oc (Prog(fundefs, e)) =
   emit oc "(global $HP (mut i32) (i32.const 0))\n" ;
   emit oc "\n;; functions\n" ;
   emit_funcs oc fundefs ;
-  emit oc "\n;; table section\n" ;
+  emit oc ";; table section\n" ;
   emit_table oc fundefs ;
   emit oc "\n;; start function\n" ;
   emit oc "(func $start (result i32)\n" ;
