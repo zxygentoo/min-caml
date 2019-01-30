@@ -47,6 +47,7 @@ let t2ofst = function
   | T.Tuple(_) | T.Array(_) | T.Var(_) -> failwith "don't know offset"
 
 let emit = Printf.fprintf
+let comment = Printf.fprintf
 
 let local_or_fvs oc known fvars ident id =
   if S.mem id known
@@ -58,8 +59,11 @@ let local_or_fvs oc known fvars ident id =
       (
         fun i (x, _t) ->
           if x = id then
-            emit oc "%s(i32.load (i32.add (i32.const %d) (get_local 0)))\n"
-              ident (i*4)
+            emit oc "%s(i32.load\
+              \n%s\t(i32.add\
+              \n%s\t\t(i32.const %d)\
+              \n%s\t\t(get_local $$env$)))\n"
+              ident ident ident (i*4) ident
       )
       fvars
   end
@@ -70,21 +74,21 @@ let rec g oc env known fvars = function
     ()
 
   | Int(i) ->
-    emit oc "(; Int(%d) ;)\n" i ;
+    comment oc "(; Int(%d) ;)\n" i ;
     emit oc "(i32.const %d)\n" i
 
   | Float(a) ->
-    emit oc "(; Float(%f) ;)\n" a ;
+    comment oc "(; Float(%f) ;)\n" a ;
     emit oc "(f32.const %f)" a
 
   | Add(x, y) ->
-    emit oc "(; Add %s %s ;)\n" x y ;
+    comment oc "(; Add %s %s ;)\n" x y ;
     emit oc "(i32.add\n" ;
     List.iter (local_or_fvs oc known fvars "\t") [x; y] ;
     emit oc ")\n"
 
   | Sub(x, y) ->
-    emit oc "(; Sub %s %s ;)\n" x y ;
+    comment oc "(; Sub %s %s ;)\n" x y ;
     emit oc "(i32.sub\n" ;
     List.iter (local_or_fvs oc known fvars "\t") [x; y] ;
     emit oc ")\n"
@@ -95,7 +99,7 @@ let rec g oc env known fvars = function
  *)
 
   | Let((x, t), e1, e2) ->
-    emit oc "(; Let %s ;)\n" x ;
+    comment oc "(; Let %s ;)\n" x ;
     let env' = M.add x t env in
     let known' = S.add x known in
     (* g oc env known fvars e1 ; *)
@@ -105,11 +109,11 @@ let rec g oc env known fvars = function
     g oc env' known' fvars e2
 
   | Var(x) ->
-    emit oc "(; Var(%s) ;)\n" x ;
+    comment oc "(; Var(%s) ;)\n" x ;
     local_or_fvs oc known fvars "" x
 
   | MakeCls((x, t), { entry = Id.Label(fn_lab) ; actual_fv }, e) ->
-    emit oc "(; MakeCls %s ;)\n" x ;
+    comment oc "(; MakeCls %s ;)\n" x ;
 
     let fn = M.find fn_lab !allfns in
     let offest_list =
@@ -117,15 +121,15 @@ let rec g oc env known fvars = function
     let env' = M.add x t env in
     let known' = S.add x known in
 
-    emit oc "(; MakeCls %s --- store codeptr ;)\n" x ;
+    comment oc "(; MakeCls %s --- store codeptr ;)\n" x ;
     emit oc "(i32.store (get_global $HP) (i32.const %d))\n"
       (M.find fn_lab !fnindex) ;
 
-    emit oc "(; MakeCls %s -- fvs ;)\n" x ;
+    comment oc "(; MakeCls %s -- fvs ;)\n" x ;
     List.iteri
       (
         fun i fv ->
-          emit oc "(; MakeCls %s --- fv: %s ;)\n" x fv ;
+          comment oc "(; MakeCls %s --- fv: %s ;)\n" x fv ;
           emit oc "(i32.store\n" ;
           emit oc "\t(i32.add (i32.const %d) (get_global $HP))\n" ((i+1)*4) ;
           local_or_fvs oc known fvars "\t" fv ;
@@ -133,33 +137,32 @@ let rec g oc env known fvars = function
       )
       actual_fv ;
 
-    emit oc "(; MakeCls %s --- return codeptr ;)\n" x ;
+    comment oc "(; MakeCls %s --- return codeptr ;)\n" x ;
     emit oc "(set_local $%s (get_global $HP))\n" x ;
 
     let alloc = List.fold_left (fun acc x -> acc + x) 0 offest_list + 4 in
     emit oc "(set_global $HP (i32.add (i32.const %d) (get_global $HP)))\n"
       alloc ;
 
-    emit oc "(; MakeCls %s --- body ;)\n" x ;
+    comment oc "(; MakeCls %s --- body ;)\n" x ;
     g oc env' known' fvars e
 
   | AppDir(Id.Label(x), bvs) ->
-    emit oc "(; AppDir %s ;)\n" x ;
+    comment oc "(; AppDir %s ;)\n" x ;
     emit oc "(call $%s\n" x ;
     (* fake env *)
     emit oc "\t(i32.const -10000)\n" ;
     List.iter
       (fun bv ->
-        emit oc "(; AppDir %s --- bv: %s ;)\n" x bv ;
+        comment oc "(; AppDir %s --- bv: %s ;)\n" x bv ;
         local_or_fvs oc known fvars "\t" bv
       )
       bvs ;
     emit oc ")\n" 
 
   | AppCls(x, bvs) ->
-    emit oc "(; AppCls %s ;)\n" x ;
-
-    emit oc "(; AppCls %s --- fvs env ;)\n" x ;
+    comment oc "(; AppCls %s ;)\n" x ;
+    comment oc "(; AppCls %s --- fvs env ;)\n" x ;
     emit oc "(i32.add\n" ;
     emit oc "(i32.const 4)\n" ;
     local_or_fvs oc known fvars "\t" x ;
@@ -168,14 +171,14 @@ let rec g oc env known fvars = function
     List.iter
       (
         fun bv ->
-          emit oc "(; AppCls %s --- bv: %s ;)\n" x bv ;
+          comment oc "(; AppCls %s --- bv: %s ;)\n" x bv ;
           local_or_fvs oc known fvars "" bv
       ) bvs ;
 
-    emit oc "(; AppCls %s --- codeptr ;)\n" x ;
+    comment oc "(; AppCls %s --- codeptr ;)\n" x ;
     local_or_fvs oc known fvars "" x ;
     emit oc "(i32.load)\n" ;
-    emit oc "(; AppCls %s -- indirect call ;)\n" x;
+    comment oc "(; AppCls %s -- indirect call ;)\n" x;
     (* emit oc "(; find ty ;)\n" ; *)
     let ty = M.find x env in
     (* emit oc "(; find ty label ;)\n" ;     *)
@@ -216,7 +219,7 @@ let emit_func oc { name = (Id.Label(label), ty); args; formal_fv; body } =
   emit oc "))\n" ;
   emit oc "(func $%s " label ;
   (* env *)
-  emit oc "(param i32) " ;
+  emit oc "(param $$env$ i32) " ;
   emit_sig oc true ty args ;
   emit oc "\n" ;
   emit_locals oc body ;
@@ -256,20 +259,20 @@ let emitcode oc (Prog(fundefs, e)) =
     !tyindex fundefs ;
 
   emit oc "(module\n" ;
-  emit oc "\n(; memory section ;)\n" ;
+  comment oc "\n(; memory section ;)\n" ;
   emit oc "(memory $0 1)\n" ;
   emit oc "(export \"memory\" (memory $0))\n" ;
-  emit oc "\n(; heap pointer ;)\n" ;
+  comment oc "\n(; heap pointer ;)\n" ;
   emit oc "(global $HP (mut i32) (i32.const 0))\n" ;
-  emit oc "\n(; functions ;)\n" ;
+  comment oc "\n(; functions ;)\n" ;
   emit_funcs oc fundefs ;
-  emit oc "(; table section ;)\n" ;
+  comment oc "(; table section ;)\n" ;
   emit_table oc fundefs ;
-  emit oc "\n(; start function ;)\n" ;
+  comment oc "\n(; start function ;)\n" ;
   emit oc "(func $start (result i32)\n" ;
   emit_locals oc e ;
   g oc M.empty S.empty [] e ;
   emit oc ")\n" ;
-  emit oc "\n(; export start function ;)\n" ;
+  comment oc "\n(; export start function ;)\n" ;
   emit oc "(export \"start\" (func $start))\n" ;
   emit oc ")\n";
