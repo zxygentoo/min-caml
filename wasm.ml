@@ -61,7 +61,7 @@ let local_or_fvs oc known fvars ident id =
           if x = id then begin
             emit oc "%s(i32.load\n" ident ;
             emit oc "%s\t(i32.add\n" ident ;
-            emit oc "%s\t\t(i32.const %d)\n" ident (i*4);
+            emit oc "%s\t\t(i32.const %d)\n" ident (i*4) ;
             emit oc "%s\t\t(get_local $$env$)))\n" ident
           end
       )
