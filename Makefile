@@ -1,7 +1,9 @@
-TESTDIR = test
-_SOURCES = adder.ml cls-bug.ml funcomp.ml
+TestDIR = test
+DuneDIR = _build/default
 
-SOURCES = $(addprefix $(TESTDIR)/,$(_SOURCES))
+SRC = adder.ml cls-bug.ml funcomp.ml
+
+SOURCES = $(addprefix $(TestDIR)/,$(SRC))
 WATS = $(SOURCES:.ml=.wat)
 WASMS = $(SOURCES:.ml=.wasm)
 
@@ -18,9 +20,9 @@ nodetest :
 	wat2wasm $< -o $@
 
 %.wat : %.ml
-	_build/default/comp.exe $(<:.ml=)
+	$(DuneDIR)/comp.exe $(<:.ml=)
 
 clean :
-	rm -rf $(SOURCES:.ml=.wasm) $(SOURCES:.ml=.wat)
+	rm -rf $(WATS) $(WASMS)
 
 .PHONY : clean
