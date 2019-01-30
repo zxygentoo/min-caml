@@ -205,10 +205,7 @@ let emit_sig oc with_label ty args =
 
 let emit_locals oc e =
   List.iter
-    (
-      fun (x, t) ->
-        emit oc "(local $%s %s)\n" x (t2s t)
-    )
+    (fun (x, t) -> emit oc "(local $%s %s)\n" x (t2s t))
     (local_vars e)
 
 let emit_func oc { name = (Id.Label(label), ty); args; formal_fv; body } =
