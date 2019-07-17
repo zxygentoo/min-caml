@@ -10,8 +10,8 @@ let extenv = ref M.empty
 
 
 let rec deref_typ = function
-  | Type.Fun(t1s, t2) ->
-    Type.Fun(List.map deref_typ t1s, deref_typ t2)
+  | Type.Fun(args_ts, body_t) ->
+    Type.Fun(List.map deref_typ args_ts, deref_typ body_t)
 
   | Type.Tuple(ts) ->
     Type.Tuple(List.map deref_typ ts)
@@ -21,12 +21,12 @@ let rec deref_typ = function
 
   | Type.Var({ contents = None } as r) ->
     Format.eprintf "uninstantiated type variable detected; assuming int@." ;
-    r := Some(Type.Int) ;
+    r := Some Type.Int ;
     Type.Int
 
-  | Type.Var({ contents = Some(t) } as r) ->
+  | Type.Var({ contents = Some t } as r) ->
     let t' = deref_typ t in
-    r := Some(t') ;
+    r := Some t' ;
     t'
 
   | t ->
@@ -38,10 +38,10 @@ let deref_id_typ (x, t) =
 
 
 let rec deref_term = function
-  | Not(e) ->
+  | Not e ->
     Not(deref_term e)
 
-  | Neg(e) ->
+  | Neg e ->
     Neg(deref_term e)
 
   | Add(e1, e2) ->
@@ -56,7 +56,7 @@ let rec deref_term = function
   | LE(e1, e2) ->
     LE(deref_term e1, deref_term e2)
 
-  | FNeg(e) ->
+  | FNeg e ->
     FNeg(deref_term e)
 
   | FAdd(e1, e2) ->
@@ -77,20 +77,19 @@ let rec deref_term = function
   | Let(xt, e1, e2) ->
     Let(deref_id_typ xt, deref_term e1, deref_term e2)
 
-  | LetRec({ name = xt; args = yts; body = e1 }, e2) ->
+  | LetRec({ name = name; args = args; body = body }, expr) ->
     LetRec(
-      {
-        name = deref_id_typ xt ;
-        args = List.map deref_id_typ yts ;
-        body = deref_term e1
+      { name = deref_id_typ name
+      ; args = List.map deref_id_typ args
+      ; body = deref_term body
       },
-      deref_term e2
+      deref_term expr
     )
 
   | App(e, es) ->
     App(deref_term e, List.map deref_term es)
 
-  | Tuple(es) ->
+  | Tuple es ->
     Tuple(List.map deref_term es)
 
   | LetTuple(xts, e1, e2) ->
@@ -110,13 +109,13 @@ let rec deref_term = function
 
 
 let rec occur r1 = function
-  | Type.Fun(t2s, t2) ->
-    List.exists (occur r1) t2s || occur r1 t2
+  | Type.Fun(args_ts, body_t) ->
+    List.exists (occur r1) args_ts || occur r1 body_t
 
-  | Type.Tuple(t2s) ->
+  | Type.Tuple t2s ->
     List.exists (occur r1) t2s
 
-  | Type.Array(t2) ->
+  | Type.Array t2 ->
     occur r1 t2
 
   | Type.Var(r2) when r1 == r2 ->
@@ -125,7 +124,7 @@ let rec occur r1 = function
   | Type.Var({ contents = None }) ->
     false
 
-  | Type.Var({ contents = Some(t2) }) ->
+  | Type.Var({ contents = Some t2 }) ->
     occur r1 t2
 
   | _ ->

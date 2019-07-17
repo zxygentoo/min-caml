@@ -11,7 +11,7 @@ WASMS = $(SOURCES:.ml=.wasm)
 test : clean compiler $(WATS) $(WASMS) nodetest
 
 compiler :
-	dune build comp.exe
+	dune build main.exe
 
 nodetest :
 	node tests.js
@@ -20,7 +20,7 @@ nodetest :
 	wat2wasm $< -o $@
 
 %.wat : %.ml
-	$(DuneDIR)/comp.exe $(<:.ml=)
+	$(DuneDIR)/main.exe $(<:.ml=)
 
 clean :
 	rm -rf $(WATS) $(WASMS)

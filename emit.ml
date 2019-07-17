@@ -7,7 +7,7 @@ module TM = Map.Make(
     type t = Type.t
     let compare = compare
   end
-)
+  )
 
 let allfns = ref M.empty
 let fnindex = ref M.empty
@@ -60,9 +60,9 @@ let local_or_fvs oc known fvars ident id =
         fun i (x, _t) ->
           if x = id then begin
             emit oc "%s(i32.load\n" ident ;
-            emit oc "%s\t(i32.add\n" ident ;
-            emit oc "%s\t\t(i32.const %d)\n" ident (i*4) ;
-            emit oc "%s\t\t(get_local $$env$)))\n" ident
+            emit oc "%s  (i32.add\n" ident ;
+            emit oc "%s    (i32.const %d)\n" ident (i*4) ;
+            emit oc "%s    (get_local $$env$)))" ident
           end
       )
       fvars
@@ -93,10 +93,10 @@ let rec g oc env known fvars = function
     List.iter (local_or_fvs oc known fvars "\t") [x; y] ;
     emit oc ")\n"
 
-(*   | IfLE(x, y, e1, e2) ->
-    emit oc "(; IfLE(%s, %s, _, _) ;)\n" x y ;
-    ()
- *)
+  (*   | IfLE(x, y, e1, e2) ->
+       emit oc "(; IfLE(%s, %s, _, _) ;)\n" x y ;
+       ()
+  *)
 
   | Let((x, t), e1, e2) ->
     comment oc "(; Let %s ;)\n" x ;
@@ -154,8 +154,8 @@ let rec g oc env known fvars = function
     emit oc "\t(i32.const -10000)\n" ;
     List.iter
       (fun bv ->
-        comment oc "(; AppDir %s --- bv: %s ;)\n" x bv ;
-        local_or_fvs oc known fvars "\t" bv
+         comment oc "(; AppDir %s --- bv: %s ;)\n" x bv ;
+         local_or_fvs oc known fvars "\t" bv
       )
       bvs ;
     emit oc ")\n" 
@@ -199,11 +199,11 @@ let emit_param oc with_label (label, ty) =
 let emit_sig oc with_label ty args =
   List.iter (emit_param oc with_label) args ;
   begin match ty with
-  | T.Fun(_, ty) ->
-    emit_result oc ty
+    | T.Fun(_, ty) ->
+      emit_result oc ty
 
-  | _ ->
-    failwith "fundef doesn't have Fun type."
+    | _ ->
+      failwith "fundef doesn't have Fun type."
   end
 
 let emit_locals oc e =
@@ -231,7 +231,7 @@ let emit_func oc { name = (Id.Label(label), ty); args; formal_fv; body } =
   emit oc ")\n"
 
 let emit_funcs oc fns =
-    List.iter (fun fn -> emit_func oc fn ; emit oc "\n") fns
+  List.iter (fun fn -> emit_func oc fn ; emit oc "\n") fns
 
 let emit_table oc fns =
   emit oc "(table %d anyfunc)\n" (List.length fns) ;
@@ -242,37 +242,37 @@ let emitcode oc (Prog(fundefs, e)) =
   Format.eprintf "==> generating WebAssembly...@." ;
 
   allfns := M.add_list
-    (
-      List.map (fun fd -> let (Id.Label(label), _) = fd.name in label, fd)
-      fundefs
-    )
-    !allfns ;
+      (
+        List.map (fun fd -> let (Id.Label(label), _) = fd.name in label, fd)
+          fundefs
+      )
+      !allfns ;
 
   fnindex := M.add_list
-    (List.mapi
-        (fun i fd -> let (Id.Label(label), _) = fd.name in label, i)
-        fundefs)
-    !fnindex ;
+      (List.mapi
+         (fun i fd -> let (Id.Label(label), _) = fd.name in label, i)
+         fundefs)
+      !fnindex ;
 
   tyindex := List.fold_left
-    (fun idx fd -> let (Id.Label(label), t) = fd.name in TM.add t label idx)
-    !tyindex fundefs ;
+      (fun idx fd -> let (Id.Label(label), t) = fd.name in TM.add t label idx)
+      !tyindex fundefs ;
 
   emit oc "(module\n" ;
+  (* emit oc "(func $min_caml_print_int (import \"js\" \"print_int\") (param i32 i32) (result i32))" ; *)
   comment oc "\n(; memory section ;)\n" ;
-  emit oc "(memory $0 1)\n" ;
+  emit oc "\n(memory $0 1)\n" ;
   emit oc "(export \"memory\" (memory $0))\n" ;
   comment oc "\n(; heap pointer ;)\n" ;
-  emit oc "(global $HP (mut i32) (i32.const 0))\n" ;
+  emit oc "\n(global $HP (mut i32) (i32.const 0))\n\n" ;
   comment oc "\n(; functions ;)\n" ;
   emit_funcs oc fundefs ;
   comment oc "(; table section ;)\n" ;
   emit_table oc fundefs ;
   comment oc "\n(; start function ;)\n" ;
-  emit oc "(func $start (result i32)\n" ;
+  emit oc "\n(func $start (result i32)\n" ;
   emit_locals oc e ;
   g oc M.empty S.empty [] e ;
   emit oc ")\n" ;
   comment oc "\n(; export start function ;)\n" ;
-  emit oc "(export \"start\" (func $start))\n" ;
-  emit oc ")\n";
+  emit oc "(export \"start\" (func $start)))\n" ;
