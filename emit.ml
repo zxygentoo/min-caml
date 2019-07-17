@@ -1,368 +1,278 @@
-open Asm
+open Closure
+
+module T = Type
+
+module TM = Map.Make(
+  struct
+    type t = Type.t
+    let compare = compare
+  end
+)
+
+let allfns = ref M.empty
+let fnindex = ref M.empty
+let tyindex = ref TM.empty
+
+let t2s = function
+  | T.Int -> "i32"
+  | T.Float -> "f32"
+  | T.Fun(_) -> "i32"
+  | _ -> failwith "don't know how to deal with this yet..."
+
+let rec local_vars = function
+  | Let((x, t), e1, e2) ->
+    (x, t) :: (local_vars e1) @ (local_vars e2)
+
+  | MakeCls((x, t), _, e) ->
+    (x, t) :: (local_vars e)
+
+  | Unit | Int(_) | Float(_)
+  | Neg(_) | FNeg(_)
+  | Add(_) | Sub(_) | FAdd(_) | FSub(_)
+  | FMul(_) | FDiv(_) | Get(_)
+  | IfEq(_)| IfLE(_)
+  | Var(_) | AppCls(_) | AppDir(_) | Tuple(_)
+  | ExtArray(_) | Put(_) ->
+    []
+
+  | LetTuple(_) ->
+    failwith "don't know how to gather locals"
+
+let t2ofst = function
+  | T.Unit -> 0
+  | T.Bool -> 4
+  | T.Int -> 4
+  | T.Float -> 4
+  | T.Fun(_) -> 4
+  | T.Tuple(_) | T.Array(_) | T.Var(_) -> failwith "don't know offset"
+
+let emit = Printf.fprintf
+let comment = Printf.fprintf
+
+let local_or_fvs oc known fvars ident id =
+  if S.mem id known
+  then emit oc "%s(get_local $%s)\n" ident id
+  else begin
+    Format.eprintf "--> id not in known, assuming env fv@." ;
+    ignore (List.find (fun (x, _) -> x = id) fvars) ;
+    List.iteri
+      (
+        fun i (x, _t) ->
+          if x = id then begin
+            emit oc "%s(i32.load\n" ident ;
+            emit oc "%s\t(i32.add\n" ident ;
+            emit oc "%s\t\t(i32.const %d)\n" ident (i*4) ;
+            emit oc "%s\t\t(get_local $$env$)))\n" ident
+          end
+      )
+      fvars
+  end
 
 
-type dest = Tail | NonTail of Id.t
-
-external gethi : float -> int32 = "gethi"
-external getlo : float -> int32 = "getlo"
-
-
-let stackset = ref S.empty
-
-let stackmap = ref []
-
-let save x =
-  stackset := S.add x !stackset;
-  if not (List.mem x !stackmap) then
-    stackmap := !stackmap @ [x]
-
-let savef x =
-  stackset := S.add x !stackset;
-  if not (List.mem x !stackmap) then
-    (let pad =
-       if List.length !stackmap mod 2 = 0 then [] else [Id.gentmp Type.Int] in
-     stackmap := !stackmap @ pad @ [x; x])
-
-let locate x =
-  let rec loc = function
-    | [] -> []
-    | y :: zs when x = y -> 0 :: List.map succ (loc zs)
-    | _y :: zs -> List.map succ (loc zs) in
-  loc !stackmap
-
-let offset x = 4 * List.hd (locate x)
-
-let stacksize () = align (List.length !stackmap * 4)
-
-let pp_id_or_imm = function
-  | V(x) -> x
-  | C(i) -> "$" ^ string_of_int i
-
-let rec shuffle sw xys =
-  (* remove identical moves *)
-  let _, xys = List.partition (fun (x, y) -> x = y) xys in
-  (* find acyclic moves *)
-  match List.partition (fun (_, y) -> List.mem_assoc y xys) xys with
-  | [], [] -> []
-  | (x, y) :: xys, [] -> (* no acyclic moves; resolve a cyclic move *)
-    (y, sw) :: (x, y) :: shuffle sw (List.map
-                                       (function
-                                         | (y', z) when y = y' -> (sw, z)
-                                         | yz -> yz)
-                                       xys)
-  | xys, acyc -> acyc @ shuffle sw xys
-
-
-let rec g oc = function
-  | dest, Ans(exp) ->
-    g' oc (dest, exp)
-
-  | dest, Let((x, _t), exp, e) ->
-    g' oc (NonTail(x), exp);
-    g oc (dest, e)
-
-and g' oc = function
-  | NonTail(_), Nop ->
+let rec g oc env known fvars = function
+  | Unit ->
     ()
-  
-  | NonTail(x), Set(i) ->
-    Printf.fprintf oc "\tmovl\t$%d, %s\n" i x
 
-  | NonTail(x), SetL(Id.Label(y)) ->
-    Printf.fprintf oc "\tmovl\t$%s, %s\n" y x
+  | Int(i) ->
+    comment oc "(; Int(%d) ;)\n" i ;
+    emit oc "(i32.const %d)\n" i
 
-  | NonTail(x), Mov(y) ->
-    if x <> y then Printf.fprintf oc "\tmovl\t%s, %s\n" y x
+  | Float(a) ->
+    comment oc "(; Float(%f) ;)\n" a ;
+    emit oc "(f32.const %f)" a
 
-  | NonTail(x), Neg(y) ->
-    if x <> y then Printf.fprintf oc "\tmovl\t%s, %s\n" y x;
-    Printf.fprintf oc "\tnegl\t%s\n" x
+  | Add(x, y) ->
+    comment oc "(; Add %s %s ;)\n" x y ;
+    emit oc "(i32.add\n" ;
+    List.iter (local_or_fvs oc known fvars "\t") [x; y] ;
+    emit oc ")\n"
 
-  | NonTail(x), Add(y, z') ->
-    if V(x) = z' then
-      Printf.fprintf oc "\taddl\t%s, %s\n" y x
-    else
-      (if x <> y then Printf.fprintf oc "\tmovl\t%s, %s\n" y x;
-       Printf.fprintf oc "\taddl\t%s, %s\n" (pp_id_or_imm z') x)
+  | Sub(x, y) ->
+    comment oc "(; Sub %s %s ;)\n" x y ;
+    emit oc "(i32.sub\n" ;
+    List.iter (local_or_fvs oc known fvars "\t") [x; y] ;
+    emit oc ")\n"
 
-  | NonTail(x), Sub(y, z') ->
-    if V(x) = z' then
-      (Printf.fprintf oc "\tsubl\t%s, %s\n" y x;
-       Printf.fprintf oc "\tnegl\t%s\n" x)
-    else
-      (if x <> y then Printf.fprintf oc "\tmovl\t%s, %s\n" y x;
-       Printf.fprintf oc "\tsubl\t%s, %s\n" (pp_id_or_imm z') x)
+(*   | IfLE(x, y, e1, e2) ->
+    emit oc "(; IfLE(%s, %s, _, _) ;)\n" x y ;
+    ()
+ *)
 
-  | NonTail(x), Ld(y, V(z), i) ->
-    Printf.fprintf oc "\tmovl\t(%s,%s,%d), %s\n" y z i x
+  | Let((x, t), e1, e2) ->
+    comment oc "(; Let %s ;)\n" x ;
+    let env' = M.add x t env in
+    let known' = S.add x known in
+    (* g oc env known fvars e1 ; *)
+    emit oc "(set_local $%s\n" x ;
+    g oc env known fvars e1 ;
+    emit oc ")\n" ;
+    g oc env' known' fvars e2
 
-  | NonTail(x), Ld(y, C(j), i) ->
-    Printf.fprintf oc "\tmovl\t%d(%s), %s\n" (j * i) y x
+  | Var(x) ->
+    comment oc "(; Var(%s) ;)\n" x ;
+    local_or_fvs oc known fvars "" x
 
-  | NonTail(_), St(x, y, V(z), i) ->
-    Printf.fprintf oc "\tmovl\t%s, (%s,%s,%d)\n" x y z i
+  | MakeCls((x, t), { entry = Id.Label(fn_lab) ; actual_fv }, e) ->
+    comment oc "(; MakeCls %s ;)\n" x ;
 
-  | NonTail(_), St(x, y, C(j), i) ->
-    Printf.fprintf oc "\tmovl\t%s, %d(%s)\n" x (j * i) y
+    let fn = M.find fn_lab !allfns in
+    let offest_list =
+      List.map t2ofst (List.map (fun (_, t) -> t) fn.formal_fv) in
+    let env' = M.add x t env in
+    let known' = S.add x known in
 
-  | NonTail(x), FMovD(y) ->
-    if x <> y then Printf.fprintf oc "\tmovsd\t%s, %s\n" y x
+    comment oc "(; MakeCls %s --- store codeptr ;)\n" x ;
+    emit oc "(i32.store (get_global $HP) (i32.const %d))\n"
+      (M.find fn_lab !fnindex) ;
 
-  | NonTail(x), FNegD(y) ->
-    if x <> y then Printf.fprintf oc "\tmovsd\t%s, %s\n" y x;
-    Printf.fprintf oc "\txorpd\tmin_caml_fnegd, %s\n" x
+    comment oc "(; MakeCls %s -- fvs ;)\n" x ;
+    List.iteri
+      (
+        fun i fv ->
+          comment oc "(; MakeCls %s --- fv: %s ;)\n" x fv ;
+          emit oc "(i32.store\n" ;
+          emit oc "\t(i32.add (i32.const %d) (get_global $HP))\n" ((i+1)*4) ;
+          local_or_fvs oc known fvars "\t" fv ;
+          emit oc ")\n"
+      )
+      actual_fv ;
 
-  | NonTail(x), FAddD(y, z) ->
-    if x = z then
-      Printf.fprintf oc "\taddsd\t%s, %s\n" y x
-    else
-      (if x <> y then Printf.fprintf oc "\tmovsd\t%s, %s\n" y x;
-       Printf.fprintf oc "\taddsd\t%s, %s\n" z x)
+    comment oc "(; MakeCls %s --- return codeptr ;)\n" x ;
+    emit oc "(set_local $%s (get_global $HP))\n" x ;
 
-  | NonTail(x), FSubD(y, z) ->
-    if x = z then
-      (* [XXX] ugly *)
-      let ss = stacksize () in
-      Printf.fprintf oc "\tmovsd\t%s, %d(%s)\n" z ss reg_sp;
-      if x <> y then Printf.fprintf oc "\tmovsd\t%s, %s\n" y x;
-      Printf.fprintf oc "\tsubsd\t%d(%s), %s\n" ss reg_sp x
-    else
-      (if x <> y then Printf.fprintf oc "\tmovsd\t%s, %s\n" y x;
-       Printf.fprintf oc "\tsubsd\t%s, %s\n" z x)
+    let alloc = List.fold_left (fun acc x -> acc + x) 0 offest_list + 4 in
+    emit oc "(set_global $HP (i32.add (i32.const %d) (get_global $HP)))\n"
+      alloc ;
 
-  | NonTail(x), FMulD(y, z) ->
-    if x = z then
-      Printf.fprintf oc "\tmulsd\t%s, %s\n" y x
-    else
-      (if x <> y then Printf.fprintf oc "\tmovsd\t%s, %s\n" y x;
-       Printf.fprintf oc "\tmulsd\t%s, %s\n" z x)
+    comment oc "(; MakeCls %s --- body ;)\n" x ;
+    g oc env' known' fvars e
 
-  | NonTail(x), FDivD(y, z) ->
-    if x = z then
-      (* [XXX] ugly *)
-      let ss = stacksize () in
-      Printf.fprintf oc "\tmovsd\t%s, %d(%s)\n" z ss reg_sp;
-      if x <> y then Printf.fprintf oc "\tmovsd\t%s, %s\n" y x;
-      Printf.fprintf oc "\tdivsd\t%d(%s), %s\n" ss reg_sp x
-    else
-      (if x <> y then Printf.fprintf oc "\tmovsd\t%s, %s\n" y x;
-       Printf.fprintf oc "\tdivsd\t%s, %s\n" z x)
+  | AppDir(Id.Label(x), bvs) ->
+    comment oc "(; AppDir %s ;)\n" x ;
+    emit oc "(call $%s\n" x ;
+    (* fake env *)
+    emit oc "\t(i32.const -10000)\n" ;
+    List.iter
+      (fun bv ->
+        comment oc "(; AppDir %s --- bv: %s ;)\n" x bv ;
+        local_or_fvs oc known fvars "\t" bv
+      )
+      bvs ;
+    emit oc ")\n" 
 
-  | NonTail(x), LdDF(y, V(z), i) ->
-    Printf.fprintf oc "\tmovsd\t(%s,%s,%d), %s\n" y z i x
+  | AppCls(x, bvs) ->
+    comment oc "(; AppCls %s ;)\n" x ;
+    comment oc "(; AppCls %s --- fvs env ;)\n" x ;
+    emit oc "(i32.add\n" ;
+    emit oc "(i32.const 4)\n" ;
+    local_or_fvs oc known fvars "\t" x ;
+    emit oc ")\n" ;
 
-  | NonTail(x), LdDF(y, C(j), i) ->
-    Printf.fprintf oc "\tmovsd\t%d(%s), %s\n" (j * i) y x
+    List.iter
+      (
+        fun bv ->
+          comment oc "(; AppCls %s --- bv: %s ;)\n" x bv ;
+          local_or_fvs oc known fvars "" bv
+      ) bvs ;
 
-  | NonTail(_), StDF(x, y, V(z), i) ->
-    Printf.fprintf oc "\tmovsd\t%s, (%s,%s,%d)\n" x y z i
+    comment oc "(; AppCls %s --- codeptr ;)\n" x ;
+    local_or_fvs oc known fvars "" x ;
+    emit oc "(i32.load)\n" ;
+    comment oc "(; AppCls %s -- indirect call ;)\n" x;
+    (* emit oc "(; find ty ;)\n" ; *)
+    let ty = M.find x env in
+    (* emit oc "(; find ty label ;)\n" ;     *)
+    let ty_lab = TM.find ty !tyindex in
+    emit oc "(call_indirect (type $%s))\n" ty_lab
 
-  | NonTail(_), StDF(x, y, C(j), i) ->
-    Printf.fprintf oc "\tmovsd\t%s, %d(%s)\n" x (j * i) y
+  | _ ->
+    failwith "~~> don't know how to compile this yet...\n"
 
-  | NonTail(_), Comment(s) ->
-    Printf.fprintf oc "\t# %s\n" s
+let emit_result oc ty =
+  emit oc "(result %s)" (t2s ty)
 
-  | NonTail(_), Save(x, y)
-    when List.mem x allregs && not (S.mem y !stackset) ->
-    save y;
-    Printf.fprintf oc "\tmovl\t%s, %d(%s)\n" x (offset y) reg_sp
-  
-  | NonTail(_), Save(x, y)
-    when List.mem x allfregs && not (S.mem y !stackset) ->
-    savef y;
-    Printf.fprintf oc "\tmovsd\t%s, %d(%s)\n" x (offset y) reg_sp
-  
-  | NonTail(_), Save(_x, y) ->
-    assert (S.mem y !stackset); ()
-  
-  | NonTail(x), Restore(y) when List.mem x allregs ->
-    Printf.fprintf oc "\tmovl\t%d(%s), %s\n" (offset y) reg_sp x
+let emit_param oc with_label (label, ty) =
+  if with_label
+  then emit oc "(param $%s %s) " label (t2s ty)
+  else emit oc "(param %s) " (t2s ty)
 
-  | NonTail(x), Restore(y) ->
-    assert (List.mem x allfregs);
-    Printf.fprintf oc "\tmovsd\t%d(%s), %s\n" (offset y) reg_sp x
+let emit_sig oc with_label ty args =
+  List.iter (emit_param oc with_label) args ;
+  begin match ty with
+  | T.Fun(_, ty) ->
+    emit_result oc ty
 
-  | Tail, (Nop | St _ | StDF _ | Comment _ | Save _ as exp) ->
-    g' oc (NonTail(Id.gentmp Type.Unit), exp);
-    Printf.fprintf oc "\tret\n";
+  | _ ->
+    failwith "fundef doesn't have Fun type."
+  end
 
-  | Tail, (Set _ | SetL _ | Mov _ | Neg _ | Add _ | Sub _ | Ld _ as exp) ->
-    g' oc (NonTail(regs.(0)), exp);
-    Printf.fprintf oc "\tret\n";
+let emit_locals oc e =
+  List.iter
+    (fun (x, t) -> emit oc "(local $%s %s)\n" x (t2s t))
+    (local_vars e)
 
-  | Tail, 
+let emit_func oc { name = (Id.Label(label), ty); args; formal_fv; body } =
+  emit oc "(type $%s (func " label ;
+  (* env *)
+  emit oc "(param i32) " ;
+  emit_sig oc false ty args ;
+  emit oc "))\n" ;
+  emit oc "(func $%s " label ;
+  (* env *)
+  emit oc "(param $$env$ i32) " ;
+  emit_sig oc true ty args ;
+  emit oc "\n" ;
+  emit_locals oc body ;
+  g oc
+    (M.add_list (args @ formal_fv) M.empty)
+    (S.of_list (List.map (fun (label, _) -> label) args))
+    formal_fv
+    body ;
+  emit oc ")\n"
+
+let emit_funcs oc fns =
+    List.iter (fun fn -> emit_func oc fn ; emit oc "\n") fns
+
+let emit_table oc fns =
+  emit oc "(table %d anyfunc)\n" (List.length fns) ;
+  emit oc "(elem (i32.const 0) %s)\n"
+    (Id.pp_list (List.init (List.length fns) (fun i -> string_of_int i)))
+
+let emitcode oc (Prog(fundefs, e)) =
+  Format.eprintf "==> generating WebAssembly...@." ;
+
+  allfns := M.add_list
     (
-      FMovD _ | FNegD _ | FAddD _ | FSubD _ | FMulD _ | FDivD _ | LdDF _ 
-      as exp
-    ) ->
-    g' oc (NonTail(fregs.(0)), exp);
-    Printf.fprintf oc "\tret\n";
+      List.map (fun fd -> let (Id.Label(label), _) = fd.name in label, fd)
+      fundefs
+    )
+    !allfns ;
 
-  | Tail, (Restore(x) as exp) ->
-    (match locate x with
-     | [_i] -> g' oc (NonTail(regs.(0)), exp)
-     | [i; j] when i + 1 = j -> g' oc (NonTail(fregs.(0)), exp)
-     | _ -> assert false);
-    Printf.fprintf oc "\tret\n";
+  fnindex := M.add_list
+    (List.mapi
+        (fun i fd -> let (Id.Label(label), _) = fd.name in label, i)
+        fundefs)
+    !fnindex ;
 
-  | Tail, IfEq(x, y', e1, e2) ->
-    Printf.fprintf oc "\tcmpl\t%s, %s\n" (pp_id_or_imm y') x;
-    g'_tail_if oc e1 e2 "je" "jne"
+  tyindex := List.fold_left
+    (fun idx fd -> let (Id.Label(label), t) = fd.name in TM.add t label idx)
+    !tyindex fundefs ;
 
-  | Tail, IfLE(x, y', e1, e2) ->
-    Printf.fprintf oc "\tcmpl\t%s, %s\n" (pp_id_or_imm y') x;
-    g'_tail_if oc e1 e2 "jle" "jg"
-
-  | Tail, IfGE(x, y', e1, e2) ->
-    Printf.fprintf oc "\tcmpl\t%s, %s\n" (pp_id_or_imm y') x;
-    g'_tail_if oc e1 e2 "jge" "jl"
-
-  | Tail, IfFEq(x, y, e1, e2) ->
-    Printf.fprintf oc "\tcomisd\t%s, %s\n" y x;
-    g'_tail_if oc e1 e2 "je" "jne"
-
-  | Tail, IfFLE(x, y, e1, e2) ->
-    Printf.fprintf oc "\tcomisd\t%s, %s\n" y x;
-    g'_tail_if oc e1 e2 "jbe" "ja"
-
-  | NonTail(z), IfEq(x, y', e1, e2) ->
-    Printf.fprintf oc "\tcmpl\t%s, %s\n" (pp_id_or_imm y') x;
-    g'_non_tail_if oc (NonTail(z)) e1 e2 "je" "jne"
-
-  | NonTail(z), IfLE(x, y', e1, e2) ->
-    Printf.fprintf oc "\tcmpl\t%s, %s\n" (pp_id_or_imm y') x;
-    g'_non_tail_if oc (NonTail(z)) e1 e2 "jle" "jg"
-
-  | NonTail(z), IfGE(x, y', e1, e2) ->
-    Printf.fprintf oc "\tcmpl\t%s, %s\n" (pp_id_or_imm y') x;
-    g'_non_tail_if oc (NonTail(z)) e1 e2 "jge" "jl"
-
-  | NonTail(z), IfFEq(x, y, e1, e2) ->
-    Printf.fprintf oc "\tcomisd\t%s, %s\n" y x;
-    g'_non_tail_if oc (NonTail(z)) e1 e2 "je" "jne"
-
-  | NonTail(z), IfFLE(x, y, e1, e2) ->
-    Printf.fprintf oc "\tcomisd\t%s, %s\n" y x;
-    g'_non_tail_if oc (NonTail(z)) e1 e2 "jbe" "ja"
-
-  | Tail, CallCls(x, ys, zs) ->
-    g'_args oc [(x, reg_cl)] ys zs;
-    Printf.fprintf oc "\tjmp\t*(%s)\n" reg_cl;
-
-  | Tail, CallDir(Id.Label(x), ys, zs) ->
-    g'_args oc [] ys zs;
-    Printf.fprintf oc "\tjmp\t%s\n" x;
-
-  | NonTail(a), CallCls(x, ys, zs) ->
-    g'_args oc [(x, reg_cl)] ys zs;
-    let ss = stacksize () in
-    if ss > 0 then Printf.fprintf oc "\taddl\t$%d, %s\n" ss reg_sp;
-    Printf.fprintf oc "\tcall\t*(%s)\n" reg_cl;
-    if ss > 0 then Printf.fprintf oc "\tsubl\t$%d, %s\n" ss reg_sp;
-    if List.mem a allregs && a <> regs.(0) then
-      Printf.fprintf oc "\tmovl\t%s, %s\n" regs.(0) a
-    else if List.mem a allfregs && a <> fregs.(0) then
-      Printf.fprintf oc "\tmovsd\t%s, %s\n" fregs.(0) a
-
-  | NonTail(a), CallDir(Id.Label(x), ys, zs) ->
-    g'_args oc [] ys zs;
-    let ss = stacksize () in
-    if ss > 0 then Printf.fprintf oc "\taddl\t$%d, %s\n" ss reg_sp;
-    Printf.fprintf oc "\tcall\t%s\n" x;
-    if ss > 0 then Printf.fprintf oc "\tsubl\t$%d, %s\n" ss reg_sp;
-    if List.mem a allregs && a <> regs.(0) then
-      Printf.fprintf oc "\tmovl\t%s, %s\n" regs.(0) a
-    else if List.mem a allfregs && a <> fregs.(0) then
-      Printf.fprintf oc "\tmovsd\t%s, %s\n" fregs.(0) a
-
-and g'_tail_if oc e1 e2 b bn =
-  let b_else = Id.genid (b ^ "_else") in
-  Printf.fprintf oc "\t%s\t%s\n" bn b_else;
-  let stackset_back = !stackset in
-  g oc (Tail, e1);
-  Printf.fprintf oc "%s:\n" b_else;
-  stackset := stackset_back;
-  g oc (Tail, e2)
-
-and g'_non_tail_if oc dest e1 e2 b bn =
-  let b_else = Id.genid (b ^ "_else") in
-  let b_cont = Id.genid (b ^ "_cont") in
-  Printf.fprintf oc "\t%s\t%s\n" bn b_else;
-  let stackset_back = !stackset in
-  g oc (dest, e1);
-  let stackset1 = !stackset in
-  Printf.fprintf oc "\tjmp\t%s\n" b_cont;
-  Printf.fprintf oc "%s:\n" b_else;
-  stackset := stackset_back;
-  g oc (dest, e2);
-  Printf.fprintf oc "%s:\n" b_cont;
-  let stackset2 = !stackset in
-  stackset := S.inter stackset1 stackset2
-
-and g'_args oc x_reg_cl ys zs =
-  assert (List.length ys <= Array.length regs - List.length x_reg_cl);
-  assert (List.length zs <= Array.length fregs);
-  let sw = Printf.sprintf "%d(%s)" (stacksize ()) reg_sp in
-  let (_i, yrs) =
-    List.fold_left
-      (fun (i, yrs) y -> (i + 1, (y, regs.(i)) :: yrs))
-      (0, x_reg_cl)
-      ys in
-  List.iter
-    (fun (y, r) -> Printf.fprintf oc "\tmovl\t%s, %s\n" y r)
-    (shuffle sw yrs);
-  let (_d, zfrs) =
-    List.fold_left
-      (fun (d, zfrs) z -> (d + 1, (z, fregs.(d)) :: zfrs))
-      (0, [])
-      zs in
-  List.iter
-    (fun (z, fr) -> Printf.fprintf oc "\tmovsd\t%s, %s\n" z fr)
-    (shuffle sw zfrs)
-
-
-let h oc { name = Id.Label(x); args = _; fargs = _; body = e; ret = _ } =
-  Printf.fprintf oc "%s:\n" x;
-  stackset := S.empty;
-  stackmap := [];
-  g oc (Tail, e)
-
-
-let emitcode oc (Prog(data, fundefs, e)) =
-  Format.eprintf "==> generating assembly...@.";
-  Printf.fprintf oc ".data\n";
-  Printf.fprintf oc ".balign\t8\n";
-  List.iter
-    (fun (Id.Label(x), d) ->
-       Printf.fprintf oc "%s:\t# %f\n" x d;
-       Printf.fprintf oc "\t.long\t0x%lx\n" (gethi d);
-       Printf.fprintf oc "\t.long\t0x%lx\n" (getlo d))
-    data;
-  Printf.fprintf oc ".text\n";
-  List.iter (fun fundef -> h oc fundef) fundefs;
-  Printf.fprintf oc ".globl\tmin_caml_start\n";
-  Printf.fprintf oc "min_caml_start:\n";
-  Printf.fprintf oc ".globl\t_min_caml_start\n";
-  Printf.fprintf oc "_min_caml_start: # for cygwin\n";
-  Printf.fprintf oc "\tpushl\t%%eax\n";
-  Printf.fprintf oc "\tpushl\t%%ebx\n";
-  Printf.fprintf oc "\tpushl\t%%ecx\n";
-  Printf.fprintf oc "\tpushl\t%%edx\n";
-  Printf.fprintf oc "\tpushl\t%%esi\n";
-  Printf.fprintf oc "\tpushl\t%%edi\n";
-  Printf.fprintf oc "\tpushl\t%%ebp\n";
-  Printf.fprintf oc "\tmovl\t32(%%esp),%s\n" reg_sp;
-  Printf.fprintf oc "\tmovl\t36(%%esp),%s\n" regs.(0);
-  Printf.fprintf oc "\tmovl\t%s,%s\n" regs.(0) reg_hp;
-  stackset := S.empty;
-  stackmap := [];
-  g oc (NonTail(regs.(0)), e);
-  Printf.fprintf oc "\tpopl\t%%ebp\n";
-  Printf.fprintf oc "\tpopl\t%%edi\n";
-  Printf.fprintf oc "\tpopl\t%%esi\n";
-  Printf.fprintf oc "\tpopl\t%%edx\n";
-  Printf.fprintf oc "\tpopl\t%%ecx\n";
-  Printf.fprintf oc "\tpopl\t%%ebx\n";
-  Printf.fprintf oc "\tpopl\t%%eax\n";
-  Printf.fprintf oc "\tret\n";
+  emit oc "(module\n" ;
+  comment oc "\n(; memory section ;)\n" ;
+  emit oc "(memory $0 1)\n" ;
+  emit oc "(export \"memory\" (memory $0))\n" ;
+  comment oc "\n(; heap pointer ;)\n" ;
+  emit oc "(global $HP (mut i32) (i32.const 0))\n" ;
+  comment oc "\n(; functions ;)\n" ;
+  emit_funcs oc fundefs ;
+  comment oc "(; table section ;)\n" ;
+  emit_table oc fundefs ;
+  comment oc "\n(; start function ;)\n" ;
+  emit oc "(func $start (result i32)\n" ;
+  emit_locals oc e ;
+  g oc M.empty S.empty [] e ;
+  emit oc ")\n" ;
+  comment oc "\n(; export start function ;)\n" ;
+  emit oc "(export \"start\" (func $start))\n" ;
+  emit oc ")\n";

@@ -3,18 +3,9 @@
         (flags (:standard -warn-error -A))))
 
 (executable
-    (name comp)
-    (libraries pipeline)
-    (modules comp))
-
-(library
-    (name pipeline)
-    (c_names float)
+    (name main)
     (preprocess (pps ppx_deriving.std))
-;    (modules (:standard \ comp wasm wasmit)))
-;    (modules (:standard \ comp wasm virtual simm regalloc asm)))
-;    (modules (:standard \ comp wasm emit)))
-    (modules (:standard \ comp wasmit emit)))
+    (modules :standard))
 
 (ocamllex lexer)
 (ocamlyacc parser)
