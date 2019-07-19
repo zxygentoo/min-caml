@@ -123,7 +123,7 @@ let rec g oc env fvars = function
     emit oc "(set_local $%s (get_global $HP))\n" x ;
     (* allocate space for free vars and move HP *)
     emit oc "(set_global $HP (i32.add (i32.const %i) (get_global $HP)))\n"
-      ((List.fold_left (+) 0 offests) + 4) ;
+      (List.fold_left (+) 4 offests) ;
     (* store function pointer *)
     emit oc "(i32.store (get_local $%s) (i32.const %i))\n"
       x (M.find fn_lab !fnindex) ;
