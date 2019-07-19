@@ -2,38 +2,38 @@ TestDIR = test
 DuneDIR = _build/default
 
 SRC = \
+print.ml \
 adder.ml \
 cls-bug.ml \
 funcomp.ml \
 manyargs.ml \
-toomanyargs.ml
-# ack.ml
-# cls-bug2.ml
-# cls-rec.ml
-# cls-reg-bug.ml
-# even-odd.ml
-# fib.ml
-# float.ml
-# gcd.ml
-# inprod-loop.ml
-# inprod.ml
-# inprod-rec.ml
-# join-reg2.ml
-# join-reg.ml
-# join-stack2.ml
-# join-stack3.ml
-# join-stack.ml
-# matmul-flat.ml
-# matmul.ml
-# non-tail-if2.ml
-# non-tail-if.ml
-# print.ml
-# shuffle.ml
-# spill2.ml
-# spill3.ml
-# spill.ml
-# sum.ml
-# sum-tail.ml
+toomanyargs.ml \
+ack.ml \
+even-odd.ml \
+fib.ml \
+gcd.ml \
+join-reg.ml \
+join-reg2.ml \
+join-stack.ml \
+join-stack2.ml \
+join-stack3.ml \
+shuffle.ml \
+sum.ml \
+sum-tail.ml \
+spill.ml \
+spill3.ml \
+# cls-rec.ml \
+# cls-reg-bug.ml \
+# cls-bug2.ml \
+# spill2.ml \
+# non-tail-if.ml \
+# non-tail-if2.ml \
+# inprod.ml \
+# inprod-loop.ml \
+# inprod-rec.ml \
+# float.ml \
+# matmul.ml \
+# matmul-flat.ml \
 
 
 TESTS   = $(addprefix $(TestDIR)/,$(SRC))
