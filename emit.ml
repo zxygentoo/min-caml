@@ -301,6 +301,7 @@ let rec g oc env fvars = function
 let emit_param oc with_label = function
   | _, Type.Unit ->
     ()
+
   | label, t ->
     let ty = str_of_ty t in
     if with_label then
@@ -312,6 +313,7 @@ let emit_param oc with_label = function
 let emit_result oc = function
   | Type.Unit ->
     ()
+
   | ret_ty ->
     emit oc " (result %s)" (str_of_ty ret_ty)
 
@@ -379,34 +381,34 @@ let emit_table oc fundefs =
 let emit_imports oc () =
   (* print_int *)
   emit oc "(func $min_caml_print_int " ;
-  emit oc "(import \"js\" \"print_int\") " ;
+  emit oc "(import \"core\" \"print_int\") " ;
   emit oc "(param i32))\n" ;
   (* print_newline *)
   emit oc "(func $min_caml_print_newline " ;
-  emit oc "(import \"js\" \"print_newline\"))\n" ;
+  emit oc "(import \"core\" \"print_newline\"))\n" ;
   (* abs_float *)
   emit oc "(func $min_caml_abs_float " ;
-  emit oc "(import \"js\" \"abs_float\") " ;
+  emit oc "(import \"core\" \"abs_float\") " ;
   emit oc "(param f64) (result f64))\n" ;
   (* sqrt *)
   emit oc "(func $min_caml_sqrt " ;
-  emit oc "(import \"js\" \"sqrt\") " ;
+  emit oc "(import \"core\" \"sqrt\") " ;
   emit oc "(param f64) (result f64))\n" ;
   (* cos *)
   emit oc "(func $min_caml_cos" ;
-  emit oc "(import \"js\" \"cos\") " ;
+  emit oc "(import \"core\" \"cos\") " ;
   emit oc "(param f64) (result f64))\n" ;
   (* sin *)
   emit oc "(func $min_caml_sin " ;
-  emit oc "(import \"js\" \"sin\") " ;
+  emit oc "(import \"core\" \"sin\") " ;
   emit oc "(param f64) (result f64))\n" ;
   (* float_of_int *)
   emit oc "(func $min_caml_float_of_int " ;
-  emit oc "(import \"js\" \"float_of_int\") " ;
+  emit oc "(import \"core\" \"float_of_int\") " ;
   emit oc "(param i32) (result f64))\n" ;
   (* int_of_float *)
   emit oc "(func $min_caml_int_of_float " ;
-  emit oc "(import \"js\" \"int_of_float\") " ;
+  emit oc "(import \"core\" \"int_of_float\") " ;
   emit oc "(param f64) (result i32))\n"
 
 

@@ -2,8 +2,9 @@
 
 const fs = require('fs');
 
-var nativeFunctions = {
-    js: {
+
+var coreFunctions = {
+    core: {
         print_int: i => process.stdout.write(String(i)), // no newline
         print_newline: () => console.log(),
         abs_float: a => Math.abs(a),
@@ -15,15 +16,17 @@ var nativeFunctions = {
     }
 };
 
+
 function run(source) {
     return WebAssembly.instantiate(
         new Uint8Array(fs.readFileSync(source)),
-        nativeFunctions
+        coreFunctions
     ).then(o => {
         o.instance.exports.start()
     }).catch(e => {
       console.log(e);
     });
-}
+};
+
 
 run(process.argv[2]);
