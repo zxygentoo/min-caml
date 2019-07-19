@@ -1,4 +1,4 @@
-TESTSDIR = test
+TESTSDIR = tests
 BUILDDIR = _build/default
 
 SOURCES = \
