@@ -28,9 +28,7 @@ let compile oc buf =
   |> Alpha.convert
   |> optimize_pass !max_opt_iter
   |> Closure.flattern
-  (* |> Emit.emitcode oc *)
-  (* |> Virtual.gencode *)
-  |> Emit2.emitcode oc
+  |> Emit.emitcode oc
 
 
 let compile_string str =

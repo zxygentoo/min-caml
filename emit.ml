@@ -12,24 +12,27 @@ let fnindex = ref M.empty
 let allfns = ref M.empty
 let tyindex = ref TM.empty
 
-let emit =
-  Printf.fprintf
+
+let emit = Printf.fprintf
 
 
 let rec local_vars = function
-  | Let((x, t), e1, e2) ->
-    (x, t) :: (local_vars e1) @ (local_vars e2)
+  | Let(xt, e1, e2) ->
+    xt :: local_vars e1 @ local_vars e2
 
-  | MakeCls((x, t), _, e) ->
-    (x, t) :: (local_vars e)
-
-  | Unit | Int _ | Float _ | Neg _ | FNeg _ | Add _ | Sub _
-  | FAdd _ | FSub _ | FMul _ | FDiv _ | Get _ | IfEq _ | IfLE _
-  | Var _ | AppCls _ | AppDir _ | Tuple _ | ExtArray _ | Put _ ->
-    []
+  | MakeCls(xt, _, e) ->
+    xt :: local_vars e
 
   | LetTuple _ ->
     failwith "don't know how to gather locals"
+
+  | _ ->
+    []
+(*   | Unit | Int _ | Float _ | Neg _ | FNeg _ | Add _ | Sub _
+     | FAdd _ | FSub _ | FMul _ | FDiv _ | Get _ | IfEq _ | IfLE _
+     | Var _ | AppCls _ | AppDir _ | Tuple _ | ExtArray _ | Put _ ->
+     []
+*)
 
 
 let t2ofst = function
@@ -63,7 +66,7 @@ let arg_is_fvar arg fvars =
   List.find_opt ((=) arg) (List.map (fun (x, _) -> x) fvars) = (Some arg)
 
 
-let emit_var oc _env fvars name =
+let emit_var oc fvars name =
   let rec emit_var' ofst = function
     | [] ->
       Printf.eprintf "==> can't find %s in fvars, assuming local\n" name ;
@@ -91,18 +94,18 @@ let rec g oc env fvars = function
 
   | Add(x, y) ->
     emit oc "(i32.add \n" ;
-    emit_var oc env fvars x ;
-    emit_var oc env fvars y ;
+    emit_var oc fvars x ;
+    emit_var oc fvars y ;
     emit oc ")\n" ;
 
   | Sub(x, y) ->
     emit oc "(i32.sub \n" ;
-    emit_var oc env fvars x ;
-    emit_var oc env fvars y ;
+    emit_var oc fvars x ;
+    emit_var oc fvars y ;
     emit oc ")\n" ;
 
   | Var v ->
-    emit_var oc env fvars v
+    emit_var oc fvars v
 
   | Let((id, t), e1, e2) ->
     let env' = M.add id t env in
@@ -114,33 +117,33 @@ let rec g oc env fvars = function
   | MakeCls((x, t), { entry = Id.Label(fn_lab) ; actual_fv }, e) ->    
     let env' = M.add x t env in
     let fn = M.find fn_lab !allfns in
-    let offest_list =
-      List.map t2ofst (List.map (fun (_, t) -> t) fn.formal_fv) in
+    let offests = List.map t2ofst (List.map (fun (_, t) -> t) fn.formal_fv) in
 
+    (* get current HP *)
     emit oc "(set_local $%s (get_global $HP))\n" x ;
-
+    (* allocate space for free vars and move HP *)
     emit oc "(set_global $HP (i32.add (i32.const %i) (get_global $HP)))\n"
-      ((List.fold_left (+) 0 offest_list) + 4) ;
-
+      ((List.fold_left (+) 0 offests) + 4) ;
+    (* store function pointer *)
     emit oc "(i32.store (get_local $%s) (i32.const %i))\n"
       x (M.find fn_lab !fnindex) ;
-
-    let current_offset = ref 0 in
+    (* store free vars *)
+    let cur_offset = ref 0 in
     List.iter2
       (fun offset fv ->
-         current_offset := !current_offset + offset ;
+         cur_offset := !cur_offset + offset ;
          emit oc "(i32.store " ;
-         emit oc "(i32.add (i32.const %i) (get_local $%s)) " !current_offset x ;
+         emit oc "(i32.add (i32.const %i) (get_local $%s)) " !cur_offset x ;
          emit oc "(get_local $%s))\n" fv ;
       )
-      offest_list
+      offests
       actual_fv ;
 
     g oc env' fvars e
 
   | AppDir(Id.Label x, args) ->
     emit oc "(call $%s\n" x ;
-    List.iter (emit_var oc env fvars) args ;
+    List.iter (emit_var oc fvars) args ;
     emit oc ")\n" 
 
   | AppCls(name, args) ->
@@ -149,10 +152,10 @@ let rec g oc env fvars = function
     emit oc "(set_local $cl_back (get_global $CL))\n" ;
     (* move CL *)
     emit oc "(set_global $CL " ;
-    emit_var oc env fvars name ;
+    emit_var oc fvars name ;
     emit oc ")\n" ;
     emit oc "(call_indirect (type $%s)\n" fun_sig ;
-    List.iter (emit_var oc env fvars) args ;
+    List.iter (emit_var oc fvars) args ;
     (* can't just emit_var here because CL moving *)
     if arg_is_fvar name fvars then
       emit oc "(i32.load (get_global $CL)))\n"
@@ -248,9 +251,9 @@ let emitcode oc (Prog(fundefs, start)) =
       !fnindex ;
 
   emit oc "(module\n" ;
-  emit oc "(func $min_caml_print_int (import \"js\" \"print_int\") (param i32))\n" ;
-  emit oc "(memory $0 1)\n" ;
-  emit oc "(export \"memory\" (memory $0))\n" ;
+  emit oc "(func $min_caml_print_int " ;
+  emit oc "(import \"js\" \"print_int\") (param i32))\n" ;
+  emit oc "(memory (export \"memory\") 1)\n" ;
   emit oc "\n"  ;
   emit oc "(global $HP (mut i32) (i32.const 0))\n" ;
   emit oc "(global $CL (mut i32) (i32.const 0))\n" ;
@@ -259,7 +262,6 @@ let emitcode oc (Prog(fundefs, start)) =
   emit oc "\n" ;
   emit_fundefs oc fundefs ;
   emit oc "\n" ;
-  (* emit oc "(func (export \"start\") (result i32)\n" ; *)
   emit oc "(func (export \"start\")\n" ;
   emit_locals oc start ;
   g oc M.empty [] start ;
