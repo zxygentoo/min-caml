@@ -5,5 +5,4 @@ let rec dbl x = x + x in
 let rec inc x = x + 1 in
 let rec dec x = x - 1 in
 let h = compose inc (compose dbl dec) in
-(* print_int (h 123) *)
-h 123
+print_int (h 123)
