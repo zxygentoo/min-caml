@@ -202,7 +202,7 @@ let rec g oc env fvars = function
   | MakeCls((x, t), { entry = Id.Label(fn_lab) ; actual_fv }, e) ->    
     let env' = M.add x t env in
     let fn = M.find fn_lab !allfns in
-    let offests = List.map t2ofst (List.map (fun (_, t) -> t) fn.formal_fv) in
+    let offests = List.map (fun (_, t) -> t2ofst t) fn.formal_fv in
     (* get current HP *)
     emit oc "(set_local $%s (get_global $HP))\n" x ;
     (* allocate space for free vars and move HP *)
