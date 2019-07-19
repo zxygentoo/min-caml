@@ -5,6 +5,7 @@ SRC = \
 print.ml \
 adder.ml \
 cls-bug.ml \
+cls-rec.ml \
 funcomp.ml \
 manyargs.ml \
 toomanyargs.ml \
@@ -22,7 +23,7 @@ sum.ml \
 sum-tail.ml \
 spill.ml \
 spill3.ml \
-# cls-rec.ml \
+# --------- FAIL TESTS -----------
 # cls-reg-bug.ml \
 # cls-bug2.ml \
 # spill2.ml \

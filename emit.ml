@@ -87,12 +87,18 @@ let arg_is_fvar arg fvars =
 let emit_var oc env fvars name =
   let rec emit_var' ofst = function
     | [] ->
-      if M.find name env = Type.Unit then
-        ()
-      else
-        emit oc "(get_local $%s)\n" name ;
+      (* if M.mem name env then *)
+      (* local var *)
+      begin if M.find name env = Type.Unit then
+          ()
+        else
+          emit oc "(get_local $%s)\n" name
+      end
+    (* else *)
+    (* global var *)
 
     | (x, t) :: _ when x = name ->
+      (* free var *)
       if t = Type.Unit then
         ()
       else
@@ -234,7 +240,7 @@ let rec g oc env fvars = function
       actual_fv ;
     g oc env' fvars e
 
-  | AppCls(name, args) ->
+  | AppCls(name, args) when M.mem name env ->
     let fun_sig = TM.find (M.find name env) !tyindex in
     (* backup CL *)
     emit oc "(set_local $cl_back (get_global $CL))\n" ;
@@ -248,9 +254,25 @@ let rec g oc env fvars = function
     if arg_is_fvar name fvars then
       emit oc "(i32.load (get_global $CL)))\n"
     else
-      emit oc "(i32.load (get_local $%s)))\n" name ;
+      emit oc "(i32.load (get_local $%s)))\n" name
+    ;
     (* restore CL *)
     emit oc "(set_global $CL (get_local $cl_back))\n"
+
+  | AppCls(name, args) when M.mem name !fnindex ->
+    (* indirect recursive call *)
+    let fun_idx = M.find name !fnindex in
+    let _, fun_ty = (M.find name !allfns).name in
+    let fun_sig = TM.find fun_ty !tyindex in
+    emit oc "(set_local $cl_back (get_global $CL))\n" ;
+    emit oc "(set_global $CL (i32.const %i))" fun_idx ;
+    emit oc "(call_indirect (type $%s)\n" fun_sig ;
+    List.iter (emit_var oc env fvars) args ;
+    emit oc "(i32.const %i))\n" fun_idx ;
+    emit oc "(set_global $CL (get_local $cl_back))\n"
+
+  | AppCls(name, _)  ->
+    failwith ("'" ^ name ^ "' is neither local or function.")
 
   | AppDir(Id.Label x, args) ->
     emit oc "(call $%s\n" x ;
@@ -343,7 +365,11 @@ let emit_fun_def oc = function
     emit_result oc ret_ty ;
     emit oc "\n" ;
     emit_locals oc body ;
-    g oc (M.add_list (args @ formal_fv) M.empty) formal_fv body ;
+    g
+      oc
+      (M.add_list (args @ formal_fv) M.empty)
+      formal_fv
+      body ;
     emit oc ")\n\n"
 
   | _ ->
