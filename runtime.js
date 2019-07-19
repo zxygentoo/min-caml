@@ -21,8 +21,8 @@ function run(source) {
     return WebAssembly.instantiate(
         new Uint8Array(fs.readFileSync(source)),
         coreFunctions
-    ).then(o => {
-        o.instance.exports.start()
+    ).then(module => {
+        module.instance.exports.start()
     }).catch(e => {
       console.log(e);
     });

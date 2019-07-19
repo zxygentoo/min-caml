@@ -69,5 +69,4 @@ let () =
         "usage: %s [-inline m] [-iter n] ...filenames without \".ml\"..."
         Sys.argv.(0)
     ) ;
-
   List.iter (fun file -> ignore (compile_file file)) !files
