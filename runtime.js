@@ -3,7 +3,7 @@
 const fs = require('fs');
 
 
-var coreFunctions = {
+const coreFunctions = {
     core: {
         print_int: i => process.stdout.write(String(i)), // no newline
         print_newline: () => console.log(),
@@ -17,14 +17,14 @@ var coreFunctions = {
 };
 
 
-function run(source) {
+const run = source => {
     return WebAssembly.instantiate(
         new Uint8Array(fs.readFileSync(source)),
         coreFunctions
     ).then(module => {
-        module.instance.exports.start()
+        module.instance.exports.start();
     }).catch(e => {
-      console.log(e);
+        console.log(e);
     });
 };
 
