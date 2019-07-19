@@ -14,10 +14,6 @@ lexer.ml
 parser.ml
 parser.mli
 
-# exe files
-min-caml
-min-caml.top
-
 # dune build directory
 _build
 
@@ -26,8 +22,4 @@ test/*
 !test/*.ml
 
 # merlin
-# .merlin
-
-# exe
-comp
-top
+.merlin
