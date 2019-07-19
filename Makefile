@@ -46,6 +46,7 @@ DIFFS   = $(TESTS:.ml=.diff)
 
 
 all : mincaml
+  cp $(BUILDDIR)/main.exe $<
 
 mincaml :
 	dune build main.exe
@@ -68,7 +69,7 @@ test : clean mincaml $(DIFFS)
 	ocaml $< > $@
 
 clean :
-	rm -rf $(WATS) $(WASMS) $(ANSWERS) $(RESULTS)
+	rm -rf $(WATS) $(WASMS) $(ANSWERS) $(RESULTS) mincaml
   dune clean
 
 .PHONY : clean test mincaml
