@@ -227,7 +227,7 @@ let rec g oc env fvars = function
   | AppCls(name, args) when M.mem name env ->
     let fun_sig = TM.find (M.find name env) !tyindex in
     (* backup CL *)
-    emit oc "(set_local $cl_back (get_global $CL))\n" ;
+    emit oc "(set_local $$cl_back (get_global $CL))\n" ;
     (* move CL *)
     emit oc "(set_global $CL " ;
     emit_var oc env fvars name ;
@@ -241,19 +241,19 @@ let rec g oc env fvars = function
       emit oc "(i32.load (get_local $%s)))\n" name
     ;
     (* restore CL *)
-    emit oc "(set_global $CL (get_local $cl_back))\n"
+    emit oc "(set_global $CL (get_local $$cl_back))\n"
 
   | AppCls(name, args) when M.mem name !fnindex ->
     (* indirect recursive call *)
     let fun_idx = M.find name !fnindex in
     let _, fun_ty = (M.find name !allfns).name in
     let fun_sig = TM.find fun_ty !tyindex in
-    emit oc "(set_local $cl_back (get_global $CL))\n" ;
+    emit oc "(set_local $$cl_back (get_global $CL))\n" ;
     emit oc "(set_global $CL (i32.const %i))" fun_idx ;
     emit oc "(call_indirect (type $%s)\n" fun_sig ;
     List.iter (emit_var oc env fvars) args ;
     emit oc "(i32.const %i))\n" fun_idx ;
-    emit oc "(set_global $CL (get_local $cl_back))\n"
+    emit oc "(set_global $CL (get_local $$cl_back))\n"
 
   | AppCls(name, _)  ->
     failwith ("'" ^ name ^ "' is neither local or function.")
@@ -334,7 +334,7 @@ let emit_locals oc e =
       | x, t -> emit oc "(local $%s %s)\n" x (str_of_ty t))
     (local_vars e) ;
   (* additional CL backup *)
-  emit oc "(local $cl_back i32)\n"
+  emit oc "(local $$cl_back i32)\n"
 
 
 let emit_fun_def oc = function
