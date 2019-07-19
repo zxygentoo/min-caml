@@ -27,8 +27,9 @@ let rec local_vars = function
   | IfLE(_, _, e1, e2) ->
     local_vars e1 @ local_vars e2
 
-  | LetTuple _ -> 
-    failwith "local_vars"
+  | LetTuple(xts, _, e) ->
+    xts @ local_vars e
+  (* failwith "local_vars" *)
 
   | Unit
   | Int _
@@ -66,14 +67,13 @@ let str_of_ty = function
   | Type.Unit ->
     ""
 
-  | Type.Int
-  | Type.Fun _ ->
-    "i32"
-
   | Type.Float ->
     "f64"
 
-  | Type.Array _ ->
+  | Type.Int
+  | Type.Fun _
+  | Type.Array _
+  | Type.Tuple _ ->
     "i32"
 
   | _ ->
@@ -279,8 +279,9 @@ let rec g oc env fvars = function
     List.iter (emit_var oc env fvars) args ;
     emit oc ")\n"
 
-  | Tuple _ ->
-    emit oc "(; -- TODO: Tuple -- ;)"
+  | Tuple xs ->
+    List.iter (fun x -> M.find x env |> ignore) xs ;
+    emit oc "(; -- TODO: Tuple %s -- ;)" (Id.pp_list xs)
 
   | LetTuple _ ->
     emit oc "(; -- TODO: LetTuple -- ;)"
@@ -399,6 +400,9 @@ let emit_imports oc () =
   emit oc "(func $min_caml_print_int " ;
   emit oc "(import \"js\" \"print_int\") " ;
   emit oc "(param i32))\n" ;
+  (* print_newline *)
+  emit oc "(func $min_caml_print_newline " ;
+  emit oc "(import \"js\" \"print_newline\"))\n" ;
   (* abs_float *)
   emit oc "(func $min_caml_abs_float " ;
   emit oc "(import \"js\" \"abs_float\") " ;

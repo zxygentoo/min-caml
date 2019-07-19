@@ -5,6 +5,7 @@ const fs = require('fs');
 var nativeFunctions = {
     js: {
         print_int: i => process.stdout.write(String(i)), // no newline
+        print_newline: () => console.log(),
         abs_float: a => Math.abs(a),
         sqrt: a => Math.sqrt(a),
         cos: a => Math.cos(a),
