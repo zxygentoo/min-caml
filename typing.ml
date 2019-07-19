@@ -271,19 +271,16 @@ let rec g env e =
   with Unify(t1, t2) ->
     raise (Error(deref_term e, deref_typ t1, deref_typ t2))
 
+
 let infer e =
   extenv := M.empty ;
-  (* 
-  (match deref_typ (g M.empty e) with
+  begin match deref_typ (g M.empty e) with
    | Type.Unit -> ()
    | _ -> Format.eprintf "warning: final result does not have type unit@."
-  ) ;
- *)
-
-  (
-    try unify Type.Unit (g M.empty e)
+  end
+  begin try unify Type.Unit (g M.empty e)
     with Unify _ ->
       Format.eprintf "==> [warning] top level does not have type unit@."
-  ) ;
+  end
   extenv := M.map deref_typ !extenv ;
   deref_term e

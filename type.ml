@@ -9,5 +9,6 @@ type t =
   | Var of t option ref
 [@@deriving show]
 
+
 let gentyp () =
   Var(ref None)
