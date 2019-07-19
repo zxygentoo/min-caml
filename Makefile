@@ -1,7 +1,7 @@
-TestDIR = test
-DuneDIR = _build/default
+TESTSDIR = test
+BUILDDIR = _build/default
 
-SRC = \
+SOURCES = \
 print.ml \
 adder.ml \
 cls-bug.ml \
@@ -37,42 +37,38 @@ spill3.ml \
 # matmul-flat.ml \
 
 
-TESTS   = $(addprefix $(TestDIR)/,$(SRC))
+TESTS   = $(addprefix $(TESTSDIR)/,$(SOURCES))
 WATS    = $(TESTS:.ml=.wat)
 WASMS   = $(TESTS:.ml=.wasm)
-RES 	= $(TESTS:.ml=.res)
+RESULTS = $(TESTS:.ml=.result)
 ANSWERS = $(TESTS:.ml=.answer)
-CMP 	= $(TESTS:.ml=.cmp)
+DIFFS   = $(TESTS:.ml=.diff)
 
 
-test : clean mincaml $(CMP)
-
-adder :
-	ocaml test/adder.ml > test/adder.answer
-	_build/default/main.exe test/adder
-	wat2wasm test/adder.wat -o test/adder.wasm
-	node run.js test/adder.wasm > test/adder.res
-	diff test/adder.answer test/adder.res
+all : mincaml
 
 mincaml :
 	dune build main.exe
 
-%.cmp : %.res %.answer
+test : clean mincaml $(DIFFS)
+
+%.diff : %.result %.answer
 	diff $?
 
-%.res : %.wasm
-	node run.js $< > $@
-
-%.answer : %.ml
-	ocaml $< > $@
+%.result : %.wasm
+	node runtime.js $< > $@
 
 %.wasm : %.wat
 	wat2wasm $< -o $@
 
 %.wat : %.ml
-	$(DuneDIR)/main.exe $(<:.ml=)
+	$(BUILDDIR)/main.exe $(<:.ml=)
+
+%.answer : %.ml
+	ocaml $< > $@
 
 clean :
-	rm -rf $(WATS) $(WASMS) $(ANSWERS) $(RES)
+	rm -rf $(WATS) $(WASMS) $(ANSWERS) $(RESULTS)
+  dune clean
 
-.PHONY : clean
+.PHONY : clean test mincaml

@@ -29,7 +29,6 @@ let rec local_vars = function
 
   | LetTuple(xts, _, e) ->
     xts @ local_vars e
-  (* failwith "local_vars" *)
 
   | Unit
   | Int _
@@ -87,15 +86,10 @@ let arg_is_fvar arg fvars =
 let emit_var oc env fvars name =
   let rec emit_var' ofst = function
     | [] ->
-      (* if M.mem name env then *)
-      (* local var *)
-      begin if M.find name env = Type.Unit then
-          ()
-        else
-          emit oc "(get_local $%s)\n" name
-      end
-    (* else *)
-    (* global var *)
+      if M.find name env = Type.Unit then
+        ()
+      else
+        emit oc "(get_local $%s)\n" name
 
     | (x, t) :: _ when x = name ->
       (* free var *)
@@ -119,85 +113,75 @@ let rec g oc env fvars = function
     emit oc "(i32.const %d)\n" i
 
   | Float a ->
-    emit oc "(f64.const %f)" a
+    emit oc "(f64.const %f)\n" a
 
   | Neg x ->
-    emit oc "(i32.sub " ;
-    emit oc "(i32.const 0)" ;
+    emit oc "(i32.sub\n(i32.const 0)\n" ;
     emit_var oc env fvars x ;
     emit oc ")\n"
 
   | Add(x, y) ->
-    emit oc "(i32.add \n" ;
+    emit oc "(i32.add\n" ;
     emit_var oc env fvars x ;
     emit_var oc env fvars y ;
     emit oc ")\n"
 
   | Sub(x, y) ->
-    emit oc "(i32.sub \n" ;
+    emit oc "(i32.sub\n" ;
     emit_var oc env fvars x ;
     emit_var oc env fvars y ;
     emit oc ")\n"
 
   | FNeg x ->
-    emit oc "(f64.sub " ;
-    emit oc "(f64.const 0)" ;
+    emit oc "(f64.sub\n(f64.const 0)\n" ;
     emit_var oc env fvars x ;
     emit oc ")\n"
 
   | FAdd(x, y) ->
-    emit oc "(f64.add \n" ;
+    emit oc "(f64.add\n" ;
     emit_var oc env fvars x ;
     emit_var oc env fvars y ;
     emit oc ")\n"
 
   | FSub(x, y) ->
-    emit oc "(f64.sub \n" ;
+    emit oc "(f64.sub\n" ;
     emit_var oc env fvars x ;
     emit_var oc env fvars y ;
     emit oc ")\n"
 
   | FMul(x, y) ->
-    emit oc "(f64.mul \n" ;
+    emit oc "(f64.mul\n" ;
     emit_var oc env fvars x ;
     emit_var oc env fvars y ;
     emit oc ")\n"
 
   | FDiv(x, y)->
-    emit oc "(f64.div \n" ;
+    emit oc "(f64.div\n" ;
     emit_var oc env fvars x ;
     emit_var oc env fvars y ;
     emit oc ")\n"
 
   | IfEq(x, y, e1, e2) ->
     let st = str_of_ty (M.find x env) in
-    emit oc "(if (result %s)\n" st;
-    emit oc "(%s.eq \n" st ;
+    emit oc "(if (result %s)\n(%s.eq\n" st st ;
     emit_var oc env fvars x ;
     emit_var oc env fvars y ;
-    emit oc ")\n" ;
-    emit oc "(then\n" ;
+    emit oc ")\n(then\n" ;
     g oc env fvars e1 ;
-    emit oc ")\n" ;
-    emit oc "(else\n" ;
+    emit oc ")\n(else\n" ;
     g oc env fvars e2 ;
-    emit oc ")\n" ;
-    emit oc ")\n"
+    emit oc "))\n"
 
   | IfLE(x, y, e1, e2) ->
     let st = str_of_ty (M.find x env) in
-    emit oc "(if (result %s)\n" st;
-    emit oc "(%s.le_s \n" st ;
+    emit oc "(if (result %s)\n(%s.le_s\n" st st ;
     emit_var oc env fvars x ;
     emit_var oc env fvars y ;
-    emit oc ")\n" ;
-    emit oc "(then\n" ;
+    emit oc ")\n(then\n" ;
     g oc env fvars e1 ;
-    emit oc ")\n" ;
-    emit oc "(else\n" ;
+    emit oc ")\n(else\n" ;
     g oc env fvars e2 ;
-    emit oc ")\n" ;
-    emit oc ")\n"
+    emit oc "))\n"
 
   | Let((id, t), e1, e2) ->
     let env' = M.add id t env in
@@ -292,20 +276,16 @@ let rec g oc env fvars = function
         ()
 
       | Type.Array(Type.Float) ->
-        emit oc "(f64.load\n" ;
-        emit oc "(i32.add " ;
+        emit oc "(f64.load\n(i32.add\n" ;
         emit_var oc env fvars i ;
         emit_var oc env fvars arr ;
-        emit oc ")" ;
-        emit oc ")\n"
+        emit oc "))\n"
 
       | Type.Array(_) ->
-        emit oc "(i32.load\n" ;
-        emit oc "(i32.add " ;
+        emit oc "(i32.load\n(i32.add\n" ;
         emit_var oc env fvars i ;
         emit_var oc env fvars arr ;
-        emit oc ")" ;
-        emit oc ")\n"
+        emit oc "))\n"
 
       | _ ->
         failwith "Get argument not Array."
@@ -371,7 +351,7 @@ let emit_fun_def oc = function
       (M.add_list (args @ formal_fv) M.empty)
       formal_fv
       body ;
-    emit oc ")\n\n"
+    emit oc ")\n"
 
   | _ ->
     failwith "argument is not a function."    
@@ -379,7 +359,8 @@ let emit_fun_def oc = function
 
 let emit_fun oc fundef =
   emit_fun_sig oc fundef ;
-  emit_fun_def oc fundef
+  emit_fun_def oc fundef ;
+  emit oc "\n"
 
 
 let emit_fundefs oc fundefs =
