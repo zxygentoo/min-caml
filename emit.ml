@@ -183,41 +183,38 @@ let rec g oc env fvars = function
     g oc env fvars e2 ;
     emit oc "))\n"
 
+  | Let((id, Type.Unit), e1, e2) ->
+    g oc env fvars e1 ;
+    g oc (M.add id Type.Unit env) fvars e2
+
   | Let((id, t), e1, e2) ->
-    let env' = M.add id t env in
-    begin match t with
-      | Type.Unit ->
-        g oc env fvars e1 ;
-        g oc env' fvars e2
-      | _ ->
-        emit oc "(set_local $%s\n" id ;
-        g oc env fvars e1 ;
-        emit oc ")\n" ;
-        g oc env' fvars e2
-    end
+    emit oc "(set_local $%s\n" id ;
+    g oc env fvars e1 ;
+    emit oc ")\n" ;
+    g oc (M.add id t env) fvars e2
 
   | Var v ->
     emit_var oc env fvars v
 
-  | MakeCls((x, t), { entry = Id.Label(fn_lab) ; actual_fv }, e) ->    
-    let env' = M.add x t env in
+  | MakeCls((name, t), { entry = Id.Label(fn_lab) ; actual_fv }, e) ->    
+    let env' = M.add name t env in
     let fn = M.find fn_lab !allfns in
     let offsets = List.map (fun (_, t) -> ofst_of_ty t) fn.formal_fv in
     (* get current HP *)
-    emit oc "(set_local $%s (get_global $HP))\n" x ;
+    emit oc "(set_local $%s (get_global $HP))\n" name ;
     (* allocate space for free vars and move HP *)
     emit oc "(set_global $HP (i32.add (i32.const %i) (get_global $HP)))\n"
       (List.fold_left (+) 4 offsets) ;
     (* store function pointer *)
     emit oc "(i32.store (get_local $%s) (i32.const %i))\n"
-      x (M.find fn_lab !fnindex) ;
+      name (M.find fn_lab !fnindex) ;
     (* store free vars *)
-    let cur_offset = ref 0 in
+    let cur_ofst = ref 0 in
     List.iter2
       (fun offset fv ->
-         cur_offset := !cur_offset + offset ;
+         cur_ofst := !cur_ofst + offset ;
          emit oc "(i32.store " ;
-         emit oc "(i32.add (i32.const %i) (get_local $%s)) " !cur_offset x ;
+         emit oc "(i32.add (i32.const %i) (get_local $%s)) " !cur_ofst name ;
          emit oc "(get_local $%s))\n" fv ;
       )
       offsets
@@ -258,8 +255,8 @@ let rec g oc env fvars = function
   | AppCls(name, _)  ->
     failwith ("'" ^ name ^ "' is neither local or function.")
 
-  | AppDir(Id.Label x, args) ->
-    emit oc "(call $%s\n" x ;
+  | AppDir(Id.Label name, args) ->
+    emit oc "(call $%s\n" name ;
     List.iter (emit_var oc env fvars) args ;
     emit oc ")\n"
 
