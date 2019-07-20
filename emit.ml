@@ -384,17 +384,19 @@ let emit_table oc fundefs =
 
 
 let emit_imports oc () =
-  let f n t =
-    emit oc "(func $min_caml_%s (import \"core\" \"%s\") %s)\n" n n t
-  in
-  f "print_newline" "" ;
-  f "print_int" "(param i32)" ;
-  f "abs_float" "(param f64) (result f64)" ;
-  f "sqrt" "(param f64) (result f64)" ;
-  f "cos" "(param f64) (result f64)" ;
-  f "sin" "(param f64) (result f64)" ;
-  f "float_of_int" "(param i32) (result f64)" ;
-  f "int_of_float" "(param f64) (result i32)"
+  List.iter
+    (f (n, s) ->
+      emit oc "(func $min_caml_%s (import \"core\" \"%s\") %s)\n" n n s)
+    [
+      ("print_newline", "") ;
+      ("print_int",     "(param i32)") ;
+      ("abs_float",     "(param f64) (result f64)") ;
+      ("sqrt",          "(param f64) (result f64)") ;
+      ("cos",           "(param f64) (result f64)") ;
+      ("sin",           "(param f64) (result f64)") ;
+      ("float_of_int",  "(param i32) (result f64)") ;
+      ("int_of_float",  "(param f64) (result i32)")
+    ]
 
 
 let emitcode oc (Prog(fundefs, start)) =
