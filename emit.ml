@@ -8,6 +8,14 @@ module TM = Map.Make(
   end
   )
 
+
+type funindex_entry =
+  { ty : Type.t      (* function type *)
+  ; idx : int        (* function index *)
+  ; ty_idx : string  (* function type index *)
+  }
+
+
 let fnindex = ref M.empty
 let allfns = ref M.empty
 let tyindex = ref TM.empty
@@ -371,42 +379,22 @@ let emit_table oc fundefs =
   emit oc "(elem (i32.const 0) %s)\n"
     (Id.pp_list
        (List.map
-          (fun { name = Id.Label(name), _ ; _} -> "$" ^ name)
+          (fun { name = Id.Label(name), _ ; _ } -> "$" ^ name)
           fundefs))
 
 
 let emit_imports oc () =
-  (* print_int *)
-  emit oc "(func $min_caml_print_int " ;
-  emit oc "(import \"core\" \"print_int\") " ;
-  emit oc "(param i32))\n" ;
-  (* print_newline *)
-  emit oc "(func $min_caml_print_newline " ;
-  emit oc "(import \"core\" \"print_newline\"))\n" ;
-  (* abs_float *)
-  emit oc "(func $min_caml_abs_float " ;
-  emit oc "(import \"core\" \"abs_float\") " ;
-  emit oc "(param f64) (result f64))\n" ;
-  (* sqrt *)
-  emit oc "(func $min_caml_sqrt " ;
-  emit oc "(import \"core\" \"sqrt\") " ;
-  emit oc "(param f64) (result f64))\n" ;
-  (* cos *)
-  emit oc "(func $min_caml_cos" ;
-  emit oc "(import \"core\" \"cos\") " ;
-  emit oc "(param f64) (result f64))\n" ;
-  (* sin *)
-  emit oc "(func $min_caml_sin " ;
-  emit oc "(import \"core\" \"sin\") " ;
-  emit oc "(param f64) (result f64))\n" ;
-  (* float_of_int *)
-  emit oc "(func $min_caml_float_of_int " ;
-  emit oc "(import \"core\" \"float_of_int\") " ;
-  emit oc "(param i32) (result f64))\n" ;
-  (* int_of_float *)
-  emit oc "(func $min_caml_int_of_float " ;
-  emit oc "(import \"core\" \"int_of_float\") " ;
-  emit oc "(param f64) (result i32))\n"
+  let f name =
+    emit oc "(func $min_caml_%s (import \"core\" \"%s\") " name name
+  in
+  f "print_newline" ; emit oc ")\n" ;
+  f "print_int" ; emit oc "(param i32))\n" ;
+  f "abs_float" ; emit oc "(param f64) (result f64))\n" ;
+  f "sqrt" ; emit oc "(param f64) (result f64))\n" ;
+  f "cos" ; emit oc "(param f64) (result f64))\n" ;
+  f "sin" ; emit oc "(param f64) (result f64))\n" ;
+  f "float_of_int" ; emit oc "(param i32) (result f64))\n" ;
+  f "int_of_float" ; emit oc "(param f64) (result i32))\n"
 
 
 let emitcode oc (Prog(fundefs, start)) =
@@ -426,13 +414,33 @@ let emitcode oc (Prog(fundefs, start)) =
          fundefs)
       !fnindex ;
 
+  let funtyindex =
+    M.add_list
+      (fundefs
+      |> List.map (fun { name = (_, t) ; _ } -> t)
+      |> S.of_list
+      |> S.to_seq
+      |> List.of_seq
+      |> List.mapi (fun t -> t, "$" ^ string_of_int i)
+      M.empty
+  in
+
+  let _funindex =
+    M.add_list
+      (List.mapi
+        (fun i { name = (Id.Label(x), t) ; _ } ->
+          x, { ty = t ; idx = i ; ty_idx = M.find t funtyindex })
+        fundefs)
+      M.empty
+  in
+
   emit oc "(module\n" ;
   emit_imports oc () ;
   emit oc "(memory (export \"memory\") 1)\n" ;
-  emit oc "\n"  ;
+  emit oc "\n" ;
   emit oc "(global $HP (mut i32) (i32.const 0))\n" ;
   emit oc "(global $CL (mut i32) (i32.const 0))\n" ;
-  emit oc "\n"  ;
+  emit oc "\n" ;
   emit_table oc fundefs ;
   emit oc "\n" ;
   emit_fundefs oc fundefs ;
