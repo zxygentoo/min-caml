@@ -51,7 +51,7 @@ let rec local_vars = function
     []
 
 
-let t2ofst = function
+let ofst_of_ty = function
   | Type.Unit -> 0
   | Type.Bool -> 4
   | Type.Int -> 4
@@ -97,10 +97,10 @@ let emit_var oc env fvars name =
         ()
       else
         emit oc "(%s.load (i32.add (i32.const %i) (get_global $CL)))\n"
-          (str_of_ty t) (ofst + (t2ofst t)) ;
+          (str_of_ty t) (ofst + (ofst_of_ty t)) ;
 
     | (_, t) :: xs  ->
-      emit_var' (ofst + (t2ofst t)) xs
+      emit_var' (ofst + (ofst_of_ty t)) xs
   in
   emit_var' 0 fvars
 
@@ -202,12 +202,12 @@ let rec g oc env fvars = function
   | MakeCls((x, t), { entry = Id.Label(fn_lab) ; actual_fv }, e) ->    
     let env' = M.add x t env in
     let fn = M.find fn_lab !allfns in
-    let offests = List.map (fun (_, t) -> t2ofst t) fn.formal_fv in
+    let offsets = List.map (fun (_, t) -> ofst_of_ty t) fn.formal_fv in
     (* get current HP *)
     emit oc "(set_local $%s (get_global $HP))\n" x ;
     (* allocate space for free vars and move HP *)
     emit oc "(set_global $HP (i32.add (i32.const %i) (get_global $HP)))\n"
-      (List.fold_left (+) 4 offests) ;
+      (List.fold_left (+) 4 offsets) ;
     (* store function pointer *)
     emit oc "(i32.store (get_local $%s) (i32.const %i))\n"
       x (M.find fn_lab !fnindex) ;
@@ -220,7 +220,7 @@ let rec g oc env fvars = function
          emit oc "(i32.add (i32.const %i) (get_local $%s)) " !cur_offset x ;
          emit oc "(get_local $%s))\n" fv ;
       )
-      offests
+      offsets
       actual_fv ;
     g oc env' fvars e
 
