@@ -25,66 +25,30 @@ let emit = Printf.fprintf
 
 
 let rec local_vars = function
-  | Let(xt, e1, e2) ->
-    xt :: local_vars e1 @ local_vars e2
-
-  | MakeCls(xt, _, e) ->
-    xt :: local_vars e
-
+  | Let(xt, e1, e2) -> xt :: local_vars e1 @ local_vars e2
+  | MakeCls(xt, _, e) -> xt :: local_vars e
   | IfEq(_, _, e1, e2)
-  | IfLE(_, _, e1, e2) ->
-    local_vars e1 @ local_vars e2
-
-  | LetTuple(xts, _, e) ->
-    xts @ local_vars e
-
-  | Unit
-  | Int _
-  | Float _
-  | Neg _
-  | FNeg _
-  | Add _
-  | Sub _
-  | FAdd _
-  | FSub _
-  | FMul _
-  | FDiv _
-  | Get _
-  | Var _
-  | AppCls _
-  | AppDir _
-  | Tuple _
-  | ExtArray _
-  | Put _ ->
-    []
+  | IfLE(_, _, e1, e2) -> local_vars e1 @ local_vars e2
+  | LetTuple(xts, _, e) -> xts @ local_vars e
+  | _ -> []
 
 
 let ofst_of_ty = function
   | Type.Unit -> 0
-  | Type.Bool -> 4
-  | Type.Int -> 4
   | Type.Float -> 8
-  | Type.Fun(_) -> 4
-  | Type.Tuple(_)
-  | Type.Array(_)
-  | Type.Var(_) -> failwith "don't know offset"
+  | _ -> 4
 
 
+(* this should return string opt*)
 let str_of_ty = function
-  | Type.Unit ->
-    ""
-
-  | Type.Float ->
-    "f64"
-
+  | Type.Unit -> failwith "ste_of_ty Unit"
+  | Type.Float -> "f64"
   | Type.Int
+  | Type.Bool
   | Type.Fun _
-  | Type.Array _
-  | Type.Tuple _ ->
-    "i32"
-
-  | _ ->
-    failwith "WebAssembly only have i32/i64/f32/f64."
+  | Type.Tuple _
+  | Type.Array _ -> "i32"
+  | Type.Var _ -> failwith "str_of_ty Var"
 
 
 let arg_is_fvar arg fvs =
