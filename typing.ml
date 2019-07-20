@@ -133,7 +133,9 @@ let rec occur r1 = function
 
 let rec unify t1 t2 =
   match t1, t2 with
-  | Type.Unit, Type.Unit | Type.Bool, Type.Bool | Type.Int, Type.Int
+  | Type.Unit, Type.Unit
+  | Type.Bool, Type.Bool
+  | Type.Int, Type.Int
   | Type.Float, Type.Float ->
     ()
 
@@ -194,7 +196,8 @@ let rec g env e =
       unify Type.Int (g env e) ;
       Type.Int
 
-    | Add(e1, e2) | Sub(e1, e2) ->
+    | Add(e1, e2)
+    | Sub(e1, e2) ->
       unify Type.Int (g env e1) ;
       unify Type.Int (g env e2) ;
       Type.Int
@@ -203,12 +206,16 @@ let rec g env e =
       unify Type.Float (g env e) ;
       Type.Float
 
-    | FAdd(e1, e2) | FSub(e1, e2) | FMul(e1, e2) | FDiv(e1, e2) ->
+    | FAdd(e1, e2)
+    | FSub(e1, e2)
+    | FMul(e1, e2)
+    | FDiv(e1, e2) ->
       unify Type.Float (g env e1) ;
       unify Type.Float (g env e2) ;
       Type.Float
 
-    | Eq(e1, e2) | LE(e1, e2) ->
+    | Eq(e1, e2)
+    | LE(e1, e2) ->
       unify (g env e1) (g env e2) ;
       Type.Bool
 
@@ -274,12 +281,12 @@ let rec g env e =
 
 let infer e =
   extenv := M.empty ;
-  begin match deref_typ (g M.empty e) with
+  (* begin match deref_typ (g M.empty e) with
    | Type.Unit -> ()
    | _ -> Format.eprintf "warning: final result does not have type unit@."
-  end
-  begin try unify Type.Unit (g M.empty e)
-    with Unify _ ->
+  end *)
+  begin try unify Type.Unit (g M.empty e) with
+    | Unify _ ->
       Format.eprintf "==> [warning] top level does not have type unit@."
   end
   extenv := M.map deref_typ !extenv ;
