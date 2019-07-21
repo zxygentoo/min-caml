@@ -9,15 +9,15 @@ exception Error of t * Type.t * Type.t
 let extenv = ref M.empty
 
 
-let rec deref_typ = function
+let rec deref_type = function
   | Type.Fun(args_ts, body_t) ->
-    Type.Fun(List.map deref_typ args_ts, deref_typ body_t)
+    Type.Fun(List.map deref_type args_ts, deref_type body_t)
 
   | Type.Tuple(ts) ->
-    Type.Tuple(List.map deref_typ ts)
+    Type.Tuple(List.map deref_type ts)
 
   | Type.Array(t) ->
-    Type.Array(deref_typ t)
+    Type.Array(deref_type t)
 
   | Type.Var({ contents = None } as r) ->
     Format.eprintf "uninstantiated type variable detected; assuming int@." ;
@@ -25,7 +25,7 @@ let rec deref_typ = function
     Type.Int
 
   | Type.Var({ contents = Some t } as r) ->
-    let t' = deref_typ t in
+    let t' = deref_type t in
     r := Some t' ;
     t'
 
@@ -33,8 +33,8 @@ let rec deref_typ = function
     t
 
 
-let deref_id_typ (x, t) =
-  (x, deref_typ t)
+let deref_id_type (x, t) =
+  (x, deref_type t)
 
 
 let rec deref_term = function
@@ -75,12 +75,12 @@ let rec deref_term = function
     If(deref_term e1, deref_term e2, deref_term e3)
 
   | Let(xt, e1, e2) ->
-    Let(deref_id_typ xt, deref_term e1, deref_term e2)
+    Let(deref_id_type xt, deref_term e1, deref_term e2)
 
   | LetRec({ name = name; args = args; body = body }, expr) ->
     LetRec(
-      { name = deref_id_typ name
-      ; args = List.map deref_id_typ args
+      { name = deref_id_type name
+      ; args = List.map deref_id_type args
       ; body = deref_term body
       },
       deref_term expr
@@ -93,7 +93,7 @@ let rec deref_term = function
     Tuple(List.map deref_term es)
 
   | LetTuple(xts, e1, e2) ->
-    LetTuple(List.map deref_id_typ xts, deref_term e1, deref_term e2)
+    LetTuple(List.map deref_id_type xts, deref_term e1, deref_term e2)
 
   | Array(e1, e2) ->
     Array(deref_term e1, deref_term e2)
@@ -276,12 +276,12 @@ let rec g env e =
       Type.Unit
 
   with Unify(t1, t2) ->
-    raise (Error(deref_term e, deref_typ t1, deref_typ t2))
+    raise (Error(deref_term e, deref_type t1, deref_type t2))
 
 
 let infer e =
   extenv := M.empty ;
-  (* begin match deref_typ (g M.empty e) with
+  (* begin match deref_type (g M.empty e) with
    | Type.Unit -> ()
    | _ -> Format.eprintf "warning: final result does not have type unit@."
   end *)
@@ -289,5 +289,5 @@ let infer e =
     | Unify _ ->
       Format.eprintf "==> [warning] top level does not have type unit@."
   end
-  extenv := M.map deref_typ !extenv ;
+  extenv := M.map deref_type !extenv ;
   deref_term e
