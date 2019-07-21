@@ -13,10 +13,10 @@ let rec deref_type = function
   | Type.Fun(args_ts, body_t) ->
     Type.Fun(List.map deref_type args_ts, deref_type body_t)
 
-  | Type.Tuple(ts) ->
+  | Type.Tuple ts ->
     Type.Tuple(List.map deref_type ts)
 
-  | Type.Array(t) ->
+  | Type.Array t ->
     Type.Array(deref_type t)
 
   | Type.Var({ contents = None } as r) ->
@@ -118,13 +118,13 @@ let rec occur r1 = function
   | Type.Array t2 ->
     occur r1 t2
 
-  | Type.Var(r2) when r1 == r2 ->
+  | Type.Var r2 when r1 == r2 ->
     true
 
-  | Type.Var({ contents = None }) ->
+  | Type.Var { contents = None } ->
     false
 
-  | Type.Var({ contents = Some t2 }) ->
+  | Type.Var { contents = Some t2 } ->
     occur r1 t2
 
   | _ ->
@@ -179,20 +179,20 @@ let rec g env e =
     | Unit ->
       Type.Unit
 
-    | Bool(_) ->
+    | Bool _ ->
       Type.Bool
 
-    | Int(_) ->
+    | Int _ ->
       Type.Int
 
-    | Float(_) ->
+    | Float _ ->
       Type.Float
 
-    | Not(e) ->
+    | Not e ->
       unify Type.Bool (g env e) ;
       Type.Bool
 
-    | Neg(e) ->
+    | Neg e ->
       unify Type.Int (g env e) ;
       Type.Int
 
@@ -202,7 +202,7 @@ let rec g env e =
       unify Type.Int (g env e2) ;
       Type.Int
 
-    | FNeg(e) ->
+    | FNeg e ->
       unify Type.Float (g env e) ;
       Type.Float
 
@@ -230,13 +230,13 @@ let rec g env e =
       unify t (g env e1) ;
       g (M.add x t env) e2
 
-    | Var(x) when M.mem x env ->
+    | Var x when M.mem x env ->
       M.find x env
 
-    | Var(x) when M.mem x !extenv ->
+    | Var x when M.mem x !extenv ->
       M.find x !extenv
 
-    | Var(x) ->
+    | Var x ->
       Format.eprintf "==> free variable `%s` assumed as external@." x ;
       let t = Type.gentyp () in
       extenv := M.add x t !extenv ;
@@ -252,7 +252,7 @@ let rec g env e =
       unify (g env e) (Type.Fun(List.map (g env) es, t)) ;
       t
 
-    | Tuple(es) ->
+    | Tuple es ->
       Type.Tuple(List.map (g env) es)
 
     | LetTuple(xts, e1, e2) ->
