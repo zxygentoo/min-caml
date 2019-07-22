@@ -27,7 +27,7 @@ let funtyindex = ref TM.empty
 
 
 let emit = Printf.fprintf
-(* let emits = Printf.sprintf *)
+let emits = Printf.sprintf
 
 
 let rec local_vars = function
@@ -67,6 +67,23 @@ let emit_var oc env fvs name =
     | (x, t) :: _ when x = name ->
       if t <> Type.Unit then
         emit oc "(%s.load (i32.add (i32.const %i) (get_global $CL)))\n"
+          (wt_of_ty env t) (ofst + (ofst_of_ty t)) ;
+
+    | (_, t) :: xs  ->
+      emit_var' (ofst + (ofst_of_ty t)) xs
+  in
+  emit_var' 0 fvs
+
+
+let emits_var env fvs name =
+  let rec emit_var' ofst = function
+    | [] ->
+      if M.find name env <> Type.Unit then
+        emits "(get_local $%s)\n" name
+
+    | (x, t) :: _ when x = name ->
+      if t <> Type.Unit then
+        emits "(%s.load (i32.add (i32.const %i) (get_global $CL)))\n"
           (wt_of_ty env t) (ofst + (ofst_of_ty t)) ;
 
     | (_, t) :: xs  ->
@@ -297,9 +314,8 @@ let rec g oc env fvs = function
          emit oc "(set_local $%s\n" x ;
          emit oc "(%s.load\n(i32.add (i32.const %i) "(wt_of_ty env t) !cur ;
          emit_var oc env fvs y ;
-         emit oc "))" ;
-         cur := !cur + (ofst_of_ty t) ;
-         emit oc ")\n")
+         emit oc ")))\n" ;
+         cur := !cur + (ofst_of_ty t))
       xts ;
     g oc (M.add_list xts env) fvs e
 
