@@ -23,18 +23,18 @@ sum.ml \
 sum-tail.ml \
 spill.ml \
 spill3.ml \
+cls-reg-bug.ml \
+non-tail-if.ml \
+inprod.ml \
 # --------- FAIL TESTS -----------
-# cls-reg-bug.ml \
 # cls-bug2.ml \
 # spill2.ml \
-# non-tail-if.ml \
 # non-tail-if2.ml \
-# inprod.ml \
 # inprod-loop.ml \
 # inprod-rec.ml \
-# float.ml \
 # matmul.ml \
 # matmul-flat.ml \
+# float.ml \
 
 
 TESTS   = $(addprefix $(TESTSDIR)/,$(SOURCES))
@@ -61,7 +61,6 @@ test : clean mincaml $(DIFFS)
 
 %.wat : %.ml
 	$(BUILDDIR)/main.exe $(<:.ml=)
-	cat $@
 
 %.answer : %.ml
 	ocaml $< > $@

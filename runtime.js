@@ -13,6 +13,7 @@ const coreFunctions = {
         sin: a => Math.sin(a),
         float_of_int: i => i,
         int_of_float: a => a|0,
+        truncate: a => a|0,
     }
 };
 

@@ -44,17 +44,17 @@ let ofst_of_ty = function
   | _ -> 4
 
 
-(* convert Type.t to i32/i64/f32/f64 in string *)
-let rec primt_of_ty env = function
-  | Type.Unit -> failwith "primt_of_ty Unit"
+(* convert Type.t to wasm type i32/i64/f32/f64 in string *)
+let rec wt_of_ty env = function
+  | Type.Unit -> failwith "wt_of_ty Unit"
   | Type.Float -> "f64"
   | Type.Int
   | Type.Bool
   | Type.Fun _
   | Type.Tuple _
   | Type.Array _ -> "i32"
-  | Type.Var { contents = None } -> failwith "primt_of_ty Var(ref(None))"
-  | Type.Var { contents = Some t } -> primt_of_ty env t
+  | Type.Var { contents = None } -> failwith "wt_of_ty Var(ref(None))"
+  | Type.Var { contents = Some t } -> wt_of_ty env t
 
 
 let emit_var oc env fvs name =
@@ -66,7 +66,7 @@ let emit_var oc env fvs name =
     | (x, t) :: _ when x = name ->
       if t <> Type.Unit then
         emit oc "(%s.load (i32.add (i32.const %i) (get_global $CL)))\n"
-          (primt_of_ty env t) (ofst + (ofst_of_ty t)) ;
+          (wt_of_ty env t) (ofst + (ofst_of_ty t)) ;
 
     | (_, t) :: xs  ->
       emit_var' (ofst + (ofst_of_ty t)) xs
@@ -134,7 +134,7 @@ let rec g oc env fvs = function
     g oc env fvs e1
 
   | IfEq(x, y, e1, e2) ->
-    let st = primt_of_ty env (M.find x env) in
+    let st = wt_of_ty env (M.find x env) in
     emit oc "(if (result %s)\n(%s.eq\n" st st ;
     emit_var oc env fvs x ;
     emit_var oc env fvs y ;
@@ -148,7 +148,7 @@ let rec g oc env fvs = function
     g oc env fvs e1
 
   | IfLE(x, y, e1, e2) ->
-    let st = primt_of_ty env (M.find x env) in
+    let st = wt_of_ty env (M.find x env) in
     emit oc "(if (result %s)\n(%s.le_s\n" st st ;
     emit_var oc env fvs x ;
     emit_var oc env fvs y ;
@@ -180,12 +180,12 @@ let rec g oc env fvs = function
     (* store function pointer *)
     emit oc "(i32.store (get_local $%s) (i32.const %i))\n" name info.idx ;
     (* store free vars *)
-    let cur_ofst = ref 0 in
+    let cur = ref 0 in
     List.iter2
       (fun offset fv ->
-         cur_ofst := !cur_ofst + offset ;
+         cur := !cur + offset ;
          emit oc "(i32.store " ;
-         emit oc "(i32.add (i32.const %i) (get_local $%s)) " !cur_ofst name ;
+         emit oc "(i32.add (i32.const %i) (get_local $%s)) " !cur name ;
          emit oc "(get_local $%s))\n" fv ;
       )
       offsets
@@ -223,11 +223,42 @@ let rec g oc env fvs = function
     emit oc ")\n"
 
   | Tuple xs ->
-    List.iter (fun x -> M.find x env |> ignore) xs ;
-    emit oc "(; -- TODO: Tuple %s -- ;)" (Id.pp_list xs)
+    (* current offset *)
+    let cur = ref 0 in
+    (* here we store thing in reverse order,
+       so we can allocate at once without adding local *)
+    let xs' = List.rev xs in
+    let ts = List.map (fun x -> M.find x env) xs' in
+    let offsets = List.map ofst_of_ty ts in
+    let total_ofst = List.fold_left (+) 0 offsets in
+    let tos = List.map2 (fun t o -> (t, o)) ts offsets in
+    emit oc "(set_global $HP (i32.add (i32.const %i) (get_global $HP)))\n"
+      total_ofst;
+    List.iter2
+      (fun x (t, o) ->
+         cur := !cur + o ;
+         emit oc "(%s.store" (wt_of_ty env t) ;
+         emit oc "(i32.sub (get_global $HP) (i32.const %i))\n" !cur ;
+         emit_var oc env fvs x ;
+         emit oc ")\n"
+      )
+      xs'
+      tos ;
+    emit oc "(i32.sub (get_global $HP) (i32.const %i))\n" !cur ;
 
-  | LetTuple _ ->
-    emit oc "(; -- TODO: LetTuple -- ;)"
+  | LetTuple(xts, y, e) ->
+    (* current offset *)
+    let cur = ref 0 in
+    List.iter
+      (fun (x, t) ->
+         emit oc "(set_local $%s\n" x ;
+         emit oc "(%s.load\n(i32.add (i32.const %i) "(wt_of_ty env t) !cur ;
+         emit_var oc env fvs y ;
+         emit oc "))" ;
+         cur := !cur + (ofst_of_ty t) ;
+         emit oc ")\n")
+      xts ;
+    g oc (M.add_list xts env) fvs e
 
   | Get(arr, i) ->
     begin match M.find arr env with
@@ -292,7 +323,7 @@ let funinfo_ty_index fun_infos =
 
 let emit_local oc = function
   | _, Type.Unit -> ()
-  | x, t -> emit oc "(local $%s %s)\n" x (primt_of_ty M.empty t)
+  | x, t -> emit oc "(local $%s %s)\n" x (wt_of_ty M.empty t)
 
 
 let emit_locals oc e =
@@ -303,17 +334,17 @@ let emit_locals oc e =
 
 let emit_label_param oc = function
   | _, Type.Unit -> ()
-  | label, t -> emit oc " (param $%s %s)" label (primt_of_ty M.empty t)
+  | label, t -> emit oc " (param $%s %s)" label (wt_of_ty M.empty t)
 
 
 let emit_param oc = function
   | Type.Unit -> ()
-  | t -> emit oc " (param %s)" (primt_of_ty M.empty t)
+  | t -> emit oc " (param %s)" (wt_of_ty M.empty t)
 
 
 let emit_result oc = function
   | Type.Unit -> ()
-  | t -> emit oc " (result %s)" (primt_of_ty M.empty t)
+  | t -> emit oc " (result %s)" (wt_of_ty M.empty t)
 
 
 (* emit module sections *)
@@ -330,7 +361,8 @@ let emit_imports oc () =
       ("cos",           "(param f64) (result f64)") ;
       ("sin",           "(param f64) (result f64)") ;
       ("float_of_int",  "(param i32) (result f64)") ;
-      ("int_of_float",  "(param f64) (result i32)")
+      ("int_of_float",  "(param f64) (result i32)") ;
+      ("truncate",      "(param f64) (result i32)")
     ]
 
 
