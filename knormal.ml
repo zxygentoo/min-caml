@@ -151,7 +151,7 @@ let rec g env = function
       (fun x -> convert_let (g env e2)
           (fun y ->
              let e3', t3 = g env e3 in
-             let e4', _t4 = g env e4 in
+             let e4', _ = g env e4 in
              IfLE(x, y, e3', e4'), t3))
 
   | Stx.If(e1, e2, e3) ->
