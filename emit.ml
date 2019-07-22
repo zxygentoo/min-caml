@@ -233,7 +233,7 @@ let rec g oc env fvs = function
     emit oc "(set_global $CL (get_local $$cl_bak))\n"
 
   | AppCls(name, _)  ->
-    failwith ("'CLs " ^ name ^ "' is neither local or function.")
+    failwith ("'AppCls: " ^ name ^ "' is neither local or function.")
 
   | AppDir(Id.Label "min_caml_create_array", [_; a])
     when M.find a env = Type.Unit ->
@@ -312,7 +312,7 @@ let rec g oc env fvs = function
     List.iter
       (fun (x, t) ->
          emit oc "(set_local $%s\n" x ;
-         emit oc "(%s.load\n(i32.add (i32.const %i) "(wt_of_ty env t) !cur ;
+         emit oc "(%s.load\n(i32.add (i32.const %i) " (wt_of_ty env t) !cur ;
          emit_var oc env fvs y ;
          emit oc ")))\n" ;
          cur := !cur + (ofst_of_ty t))
