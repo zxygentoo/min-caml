@@ -25,11 +25,11 @@ type t =
   | ExtArray of Id.t
   | ExtFunApp of Id.t * Id.t list
 
-and fundef = {
-  name : Id.t * Type.t;
-  args : (Id.t * Type.t) list;
-  body : t
-}
+and fundef =
+  { name : Id.t * Type.t
+  ; args : (Id.t * Type.t) list
+  ; body : t
+  }
 
 
 let rec free_vars = function
@@ -166,14 +166,13 @@ let rec g env = function
     Var(x), M.find x env
 
   | Stx.Var(x) ->
-    (
-      match M.find x !Typing.extenv with
+    begin match M.find x !Typing.extenv with
       | Type.Array(_) as t ->
         ExtArray x, t
 
       | _ -> 
         failwith (Printf.sprintf "external `%s` doesn't have array type@." x)
-    )
+    end
 
   | Stx.LetRec({ name = (x, t); args; body }, e2) ->
     let env' = M.add x t env in
@@ -182,8 +181,7 @@ let rec g env = function
     LetRec({ name = (x, t); args; body = e1' }, e2'), t2
 
   | Stx.App(Stx.Var(f), e2s) when not (M.mem f env) ->
-    (
-      match M.find f !Typing.extenv with
+    begin match M.find f !Typing.extenv with
       | Type.Fun(_, t) ->
         (* "xs" are identifiers for the arguments *)
         let rec bind xs = function
@@ -199,11 +197,10 @@ let rec g env = function
 
       | _ ->
         failwith (Printf.sprintf "can't find external `%s`@." f)
-    )
+    end
 
   | Stx.App(e1, e2s) ->
-    (
-      match g env e1 with
+    begin match g env e1 with
       | _, Type.Fun(_, t) as g_e1 ->
         convert_let g_e1
           (fun f ->
@@ -223,7 +220,7 @@ let rec g env = function
         failwith (
           Printf.sprintf "frist expression of App doesn't have Fun type@."
         )
-    )
+    end
 
   | Stx.Tuple(exps) ->
     let rec bind xs ts = function
@@ -261,8 +258,7 @@ let rec g env = function
               ExtFunApp(l, [x; y]), Type.Array(t2)))
 
   | Stx.Get(e1, e2) ->
-    (
-      match g env e1 with
+    begin match g env e1 with
       | _, Type.Array(t) as g_e1 ->
         convert_let g_e1
           (fun x -> convert_let (g env e2)
@@ -270,7 +266,7 @@ let rec g env = function
 
       | _ ->
         assert false
-    )
+    end
 
   | Stx.Put(e1, e2, e3) ->
     convert_let (g env e1)

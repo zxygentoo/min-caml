@@ -195,7 +195,7 @@ let rec g oc env fvs = function
 
   | AppCls(name, args) when M.mem name env ->
     (* backup CL *)
-    emit oc "(set_local $$cl_back (get_global $CL))\n" ;
+    emit oc "(set_local $$cl_bak (get_global $CL))\n" ;
     (* move CL *)
     emit oc "(set_global $CL " ; emit_var oc env fvs name ; emit oc ")\n" ;
     emit oc "(call_indirect (type %s)\n"
@@ -203,17 +203,17 @@ let rec g oc env fvs = function
     List.iter (emit_var oc env fvs) args ;
     emit oc "(i32.load (get_global $CL)))\n" ;
     (* restore CL *)
-    emit oc "(set_global $CL (get_local $$cl_back))\n"
+    emit oc "(set_global $CL (get_local $$cl_bak))\n"
 
   | AppCls(name, args) when M.mem name !funindex ->
     (* for indirect recursive call *)
     let fun_info = (M.find name !funindex) in
-    emit oc "(set_local $$cl_back (get_global $CL))\n" ;
+    emit oc "(set_local $$cl_bak (get_global $CL))\n" ;
     emit oc "(set_global $CL (i32.const %i))" fun_info.idx ;
     emit oc "(call_indirect (type %s)\n" fun_info.ty_idx ;
     List.iter (emit_var oc env fvs) args ;
     emit oc "(i32.const %i))\n" fun_info.idx ;
-    emit oc "(set_global $CL (get_local $$cl_back))\n"
+    emit oc "(set_global $CL (get_local $$cl_bak))\n"
 
   | AppCls(name, _)  ->
     failwith ("'CLs " ^ name ^ "' is neither local or function.")
@@ -304,7 +304,6 @@ let rec g oc env fvs = function
     g oc (M.add_list xts env) fvs e
 
   | Get(x, y) ->
-    emit oc "(; --- Get --- ;)\n" ;
     begin match M.find x env with
       | Type.Array(Type.Unit) ->
         ()
@@ -402,7 +401,7 @@ let emit_locals oc e =
      we can eliminate this when unnecessary, but the additional check
      just seems not worth it, and in a real production system,
      you will most certainly have a backend optimization for that anyway. *)
-  emit oc "(local $$cl_back i32)\n" ;
+  emit oc "(local $$cl_bak i32)\n" ;
   emit oc "(local $$counter i32)\n"
 
 
