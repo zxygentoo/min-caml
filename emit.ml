@@ -27,6 +27,7 @@ let funtyindex = ref TM.empty
 
 
 let emit = Printf.fprintf
+(* let emits = Printf.sprintf *)
 
 
 let rec local_vars = function
@@ -217,6 +218,49 @@ let rec g oc env fvs = function
   | AppCls(name, _)  ->
     failwith ("'CLs " ^ name ^ "' is neither local or function.")
 
+  | AppDir(Id.Label "min_caml_create_array", [_; a])
+    when M.find a env = Type.Unit ->
+    ()
+
+  | AppDir(Id.Label "min_caml_create_float_array", [n; a]) ->
+    emit oc "(set_local $$counter (i32.const 0))\n" ;
+    emit oc "(block\n(loop\n" ;
+    emit oc "(br_if 1 (i32.eq (get_local $$counter)\n" ;
+    emit_var oc env fvs n ;
+    emit oc "))\n" ;
+    emit oc "(f64.store\n(get_global $HP)\n" ;
+    emit_var oc env fvs a ;
+    emit oc ")\n" ;
+    emit oc "(set_global $HP (i32.add (i32.const 8) (get_global $HP)))\n" ;
+    emit oc "(set_local $$counter\n" ;
+    emit oc "(i32.add (get_local $$counter) (i32.const 1)))\n" ;
+    emit oc "(br 0)\n" ;
+    emit oc "))\n" ;
+    emit oc "(i32.sub (get_global $HP) (i32.mul (i32.const 8)\n" ;
+    emit_var oc env fvs n ;
+    emit oc "))\n" ;
+
+  | AppDir(Id.Label "min_caml_create_array", [n; a]) ->
+    emit oc "(set_local $$counter (i32.const 0))\n" ;
+    emit oc "(block\n(loop\n" ;
+    emit oc "(br_if 1 (i32.eq (get_local $$counter)\n" ;
+    emit_var oc env fvs n ;
+    emit oc "))\n" ;
+    emit oc "(i32.store\n(get_global $HP)\n" ;
+    emit_var oc env fvs a ;
+    emit oc ")\n" ;
+    emit oc "(set_global $HP (i32.add (i32.const 4) (get_global $HP)))\n" ;
+    emit oc "(set_local $$counter\n" ;
+    emit oc "(i32.add (get_local $$counter) (i32.const 1)))\n" ;
+    emit oc "(br 0)\n" ;
+    emit oc "))\n" ;
+    emit oc "(i32.sub (get_global $HP) (i32.mul (i32.const 4)\n" ;
+    emit_var oc env fvs n ;
+    emit oc "))\n" ;
+
+  | AppDir(Id.Label "min_caml_create_array", _) ->
+    failwith "'min_caml_create_array': wrong number of arguments."
+
   | AppDir(Id.Label name, args) ->
     emit oc "(call $%s\n" name ;
     List.iter (emit_var oc env fvs) args ;
@@ -240,8 +284,7 @@ let rec g oc env fvs = function
          emit oc "(%s.store" (wt_of_ty env t) ;
          emit oc "(i32.sub (get_global $HP) (i32.const %i))\n" !cur ;
          emit_var oc env fvs x ;
-         emit oc ")\n"
-      )
+         emit oc ")\n")
       xs'
       tos ;
     emit oc "(i32.sub (get_global $HP) (i32.const %i))\n" !cur ;
@@ -260,29 +303,56 @@ let rec g oc env fvs = function
       xts ;
     g oc (M.add_list xts env) fvs e
 
-  | Get(arr, i) ->
-    begin match M.find arr env with
+  | Get(x, y) ->
+    emit oc "(; --- Get --- ;)\n" ;
+    begin match M.find x env with
       | Type.Array(Type.Unit) ->
         ()
 
       | Type.Array(Type.Float) ->
         emit oc "(f64.load\n(i32.add\n" ;
-        emit_var oc env fvs i ;
-        emit_var oc env fvs arr ;
+        emit oc "(i32.mul\n(i32.const 8)\n" ;
+        emit_var oc env fvs x ;
+        emit oc ")\n" ;
+        emit_var oc env fvs y ;
         emit oc "))\n"
 
       | Type.Array(_) ->
         emit oc "(i32.load\n(i32.add\n" ;
-        emit_var oc env fvs i ;
-        emit_var oc env fvs arr ;
+        emit oc "(i32.mul\n(i32.const 4)\n" ;
+        emit_var oc env fvs x ;
+        emit oc ")\n" ;
+        emit_var oc env fvs y ;
         emit oc "))\n"
 
       | _ ->
-        failwith "Get argument not Array."
+        failwith "Get: first argument is not Array."
     end
 
-  | Put _ ->
-    emit oc "(; -- TODO: Put -- ;)"
+  | Put(x, y, z) ->
+    begin match M.find x env with
+      | Type.Array(Type.Unit) ->
+        ()
+
+      | Type.Array(Type.Float) ->
+        emit oc "(f64.store\n(i32.add\n" ;
+        emit_var oc env fvs x ;
+        emit_var oc env fvs y ;
+        emit oc ")" ;
+        emit_var oc env fvs z ;
+        emit oc ")\n"
+
+      | Type.Array(_) ->
+        emit oc "(i32.store\n(i32.add\n" ;
+        emit_var oc env fvs x ;
+        emit_var oc env fvs y ;
+        emit oc ")" ;
+        emit_var oc env fvs z ;
+        emit oc ")\n"
+
+      | _ ->
+        failwith "Put: first argument is not Array."
+    end
 
   | ExtArray _ ->
     emit oc "(; -- TODO: ExtArray -- ;)"
@@ -328,8 +398,12 @@ let emit_local oc = function
 
 let emit_locals oc e =
   List.iter (emit_local oc) (local_vars e) ;
-  (* additional CL backup *)
-  emit oc "(local $$cl_back i32)\n"
+  (* additional CL backup and counter
+     we can eliminate this when unnecessary, but the additional check
+     just seems not worth it, and in a real production system,
+     you will most certainly have a backend optimization for that anyway. *)
+  emit oc "(local $$cl_back i32)\n" ;
+  emit oc "(local $$counter i32)\n"
 
 
 let emit_label_param oc = function

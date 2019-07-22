@@ -22,16 +22,16 @@ shuffle.ml \
 sum.ml \
 sum-tail.ml \
 spill.ml \
+spill2.ml \
 spill3.ml \
 cls-reg-bug.ml \
 non-tail-if.ml \
 inprod.ml \
 # --------- FAIL TESTS -----------
 # cls-bug2.ml \
-# spill2.ml \
-# non-tail-if2.ml \
-# inprod-loop.ml \
 # inprod-rec.ml \
+# inprod-loop.ml \
+# non-tail-if2.ml \
 # matmul.ml \
 # matmul-flat.ml \
 # float.ml \
