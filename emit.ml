@@ -27,7 +27,7 @@ let funtyindex = ref TM.empty
 
 
 let emit = Printf.fprintf
-let emits = Printf.sprintf
+let smit = Printf.sprintf
 
 
 let rec local_vars = function
@@ -75,21 +75,29 @@ let emit_var oc env fvs name =
   emit_var' 0 fvs
 
 
-let emits_var env fvs name =
-  let rec emit_var' ofst = function
+let emit_vars oc env fvs args =
+  List.iter (emit_var oc env fvs) args
+
+
+let smit_var env fvs name =
+  let rec smit_var' ofst = function
     | [] ->
       if M.find name env <> Type.Unit then
-        emits "(get_local $%s)\n" name
+        smit "(get_local $%s)\n" name
 
     | (x, t) :: _ when x = name ->
       if t <> Type.Unit then
-        emits "(%s.load (i32.add (i32.const %i) (get_global $CL)))\n"
+        smit "(%s.load (i32.add (i32.const %i) (get_global $CL)))\n"
           (wt_of_ty env t) (ofst + (ofst_of_ty t)) ;
 
     | (_, t) :: xs  ->
-      emit_var' (ofst + (ofst_of_ty t)) xs
+      smit_var' (ofst + (ofst_of_ty t)) xs
   in
-  emit_var' 0 fvs
+  smit_var' 0 fvs
+
+
+let smit_vars env fvs args =
+  Id.pp_list (List.map (smit env fvs) args)
 
 
 let rec g oc env fvs = function
@@ -236,26 +244,8 @@ let rec g oc env fvs = function
     failwith ("'AppCls: " ^ name ^ "' is neither local or function.")
 
   | AppDir(Id.Label "min_caml_create_array", [_; a])
-    when M.find a env = Type.Unit ->
+    when M.mem a env && M.find a env = Type.Unit ->
     ()
-
-  | AppDir(Id.Label "min_caml_create_float_array", [n; a]) ->
-    emit oc "(set_local $$counter (i32.const 0))\n" ;
-    emit oc "(block\n(loop\n" ;
-    emit oc "(br_if 1 (i32.eq (get_local $$counter)\n" ;
-    emit_var oc env fvs n ;
-    emit oc "))\n" ;
-    emit oc "(f64.store\n(get_global $HP)\n" ;
-    emit_var oc env fvs a ;
-    emit oc ")\n" ;
-    emit oc "(set_global $HP (i32.add (i32.const 8) (get_global $HP)))\n" ;
-    emit oc "(set_local $$counter\n" ;
-    emit oc "(i32.add (get_local $$counter) (i32.const 1)))\n" ;
-    emit oc "(br 0)\n" ;
-    emit oc "))\n" ;
-    emit oc "(i32.sub (get_global $HP) (i32.mul (i32.const 8)\n" ;
-    emit_var oc env fvs n ;
-    emit oc "))\n" ;
 
   | AppDir(Id.Label "min_caml_create_array", [n; a]) ->
     emit oc "(set_local $$counter (i32.const 0))\n" ;
@@ -275,8 +265,27 @@ let rec g oc env fvs = function
     emit_var oc env fvs n ;
     emit oc "))\n" ;
 
-  | AppDir(Id.Label "min_caml_create_array", _) ->
-    failwith "'min_caml_create_array': wrong number of arguments."
+  | AppDir(Id.Label "min_caml_create_float_array", [n; a]) ->
+    emit oc "(set_local $$counter (i32.const 0))\n" ;
+    emit oc "(block\n(loop\n" ;
+    emit oc "(br_if 1 (i32.eq (get_local $$counter)\n" ;
+    emit_var oc env fvs n ;
+    emit oc "))\n" ;
+    emit oc "(f64.store\n(get_global $HP)\n" ;
+    emit_var oc env fvs a ;
+    emit oc ")\n" ;
+    emit oc "(set_global $HP (i32.add (i32.const 8) (get_global $HP)))\n" ;
+    emit oc "(set_local $$counter\n" ;
+    emit oc "(i32.add (get_local $$counter) (i32.const 1)))\n" ;
+    emit oc "(br 0)\n" ;
+    emit oc "))\n" ;
+    emit oc "(i32.sub (get_global $HP) (i32.mul (i32.const 8)\n" ;
+    emit_var oc env fvs n ;
+    emit oc "))\n" ;
+
+  | AppDir(Id.Label "min_caml_create_array", _)
+  | AppDir(Id.Label "min_caml_create_float_array", _) ->
+    failwith "wrong number of arguments for array creation."
 
   | AppDir(Id.Label name, args) ->
     emit oc "(call $%s\n" name ;
@@ -286,8 +295,7 @@ let rec g oc env fvs = function
   | Tuple xs ->
     (* current offset *)
     let cur = ref 0 in
-    (* here we store thing in reverse order,
-       so we can allocate at once without adding local *)
+    (* reverse order *)
     let xs' = List.rev xs in
     let ts = List.map (fun x -> M.find x env) xs' in
     let offsets = List.map ofst_of_ty ts in
@@ -414,7 +422,7 @@ let emit_local oc = function
 let emit_locals oc e =
   List.iter (emit_local oc) (local_vars e) ;
   (* additional CL backup and counter
-     we can eliminate this when unnecessary, but the additional check
+     we can eliminate these when unnecessary, but the additional check
      just seems not worth it, and in a real production system,
      you will most certainly have a backend optimization for that anyway. *)
   emit oc "(local $$cl_bak i32)\n" ;
