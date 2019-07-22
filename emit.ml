@@ -10,6 +10,7 @@ module TM = Map.Make(T_)
 module TS = Set.Make(T_)
 
 
+(* holding various information about fundef *)
 type fun_info =
   { id : Id.t
   ; ty : Type.t
@@ -20,6 +21,7 @@ type fun_info =
 
 (* fun_info lookup by name *)
 let funindex = ref M.empty
+
 (* fun_info lookup by typ *)
 let funtyindex = ref TM.empty
 
@@ -161,16 +163,13 @@ let rec g oc env fvs = function
     g oc (M.add id Type.Unit env) fvs e2
 
   | Let((id, t), e1, e2) ->
-    emit oc "(set_local $%s\n" id ;
-    g oc env fvs e1 ;
-    emit oc ")\n" ;
+    emit oc "(set_local $%s\n" id ; g oc env fvs e1 ; emit oc ")\n" ;
     g oc (M.add id t env) fvs e2
 
   | Var v ->
     emit_var oc env fvs v
 
   | MakeCls((name, t), { entry = Id.Label(n) ; actual_fv }, e) ->
-    let env' = M.add name t env in
     let info = M.find n !funindex in
     let offsets = List.map (fun (_, t) -> ofst_of_ty t) info.fn.formal_fv in
     (* get HP *)
@@ -191,7 +190,7 @@ let rec g oc env fvs = function
       )
       offsets
       actual_fv ;
-    g oc env' fvs e
+    g oc (M.add name t env) fvs e
 
   | AppCls(name, args) when M.mem name env ->
     (* backup CL *)
@@ -206,7 +205,7 @@ let rec g oc env fvs = function
     emit oc "(set_global $CL (get_local $$cl_back))\n"
 
   | AppCls(name, args) when M.mem name !funindex ->
-    (* indirect recursive call *)
+    (* for indirect recursive call *)
     let fun_info = (M.find name !funindex) in
     emit oc "(set_local $$cl_back (get_global $CL))\n" ;
     emit oc "(set_global $CL (i32.const %i))" fun_info.idx ;
@@ -258,35 +257,38 @@ let rec g oc env fvs = function
     emit oc "(; -- TODO: ExtArray -- ;)"
 
 
-let emit_param oc = function
-  | _, Type.Unit -> ()
-  | label, t -> emit oc " (param $%s %s)" label (primt_of_ty M.empty t)
+(* function index building *)
 
-let emit_sig oc = function
-  | Type.Unit -> ()
-  | t -> emit oc " (param %s)" (primt_of_ty M.empty t)
-
-
-let emit_result oc = function
-  | Type.Unit -> ()
-  | t -> emit oc " (result %s)" (primt_of_ty M.empty t)
+let funsig_index fundefs =
+  List.fold_left
+    (fun tm (t, idx) -> TM.add t idx tm)
+    TM.empty
+    (fundefs
+     |> List.map (fun { name = (_, t) ; _ } -> t)
+     |> TS.of_list |> TS.to_seq |> List.of_seq
+     |> List.mapi (fun i t -> t, "$" ^ string_of_int i))
 
 
-let emit_funtype oc (t, idx) =
-  match t with
-  | Type.Fun(args, ret_t) ->
-    emit oc "(type %s (func" idx ;
-    List.iter (emit_sig oc) args ;
-    emit_result oc ret_t ;
-    emit oc "))\n"
+let infos_of_fundefs fundefs sigidx =
+  List.mapi
+    (fun i ({ name = (Id.Label n, t) ; _ } as fundef) ->
+       { id = n
+       ; ty = t
+       ; idx = i
+       ; ty_idx = TM.find t sigidx
+       ; fn = fundef })
+    fundefs
 
-  | _ ->
-    raise (Invalid_argument "emit_funtype")
+
+let funinfo_name_index fun_infos =
+  M.add_list (List.map (fun e -> e.id, e) fun_infos) M.empty
 
 
-let emit_funtypes oc sigidx =
-  List.iter (emit_funtype oc) (TM.bindings sigidx)
+let funinfo_ty_index fun_infos =
+  List.fold_left (fun tm e -> TM.add e.ty e tm) TM.empty fun_infos
 
+
+(* emit helpers *)
 
 let emit_local oc = function
   | _, Type.Unit -> ()
@@ -299,38 +301,22 @@ let emit_locals oc e =
   emit oc "(local $$cl_back i32)\n"
 
 
-let emit_fundef oc = function
-  | { name = (Id.Label n, Type.Fun(_, ret_t)) ;
-      args ; formal_fv ; body ; _
-    } ->
-    emit oc "(func $%s" n ;
-    List.iter (emit_param oc) args ;
-    emit_result oc ret_t ;
-    emit oc "\n" ;
-    emit_locals oc body ;
-    g
-      oc
-      (M.add_list (args @ formal_fv) M.empty)
-      formal_fv
-      body ;
-    emit oc ")\n"
-
-  | _ ->
-    raise (Invalid_argument "emit_fundef")
+let emit_label_param oc = function
+  | _, Type.Unit -> ()
+  | label, t -> emit oc " (param $%s %s)" label (primt_of_ty M.empty t)
 
 
-let emit_fundefs oc fundefs =
-  List.iter (emit_fundef oc) fundefs
+let emit_param oc = function
+  | Type.Unit -> ()
+  | t -> emit oc " (param %s)" (primt_of_ty M.empty t)
 
 
-let emit_table oc fundefs =
-  emit oc "(table %d anyfunc)\n" (List.length fundefs) ;
-  emit oc "(elem (i32.const 0) %s)\n"
-    (Id.pp_list
-       (List.map
-          (fun { name = Id.Label n, _ ; _ } -> "$" ^ n)
-          fundefs))
+let emit_result oc = function
+  | Type.Unit -> ()
+  | t -> emit oc " (result %s)" (primt_of_ty M.empty t)
 
+
+(* emit module sections *)
 
 let emit_imports oc () =
   List.iter
@@ -348,6 +334,48 @@ let emit_imports oc () =
     ]
 
 
+let emit_table oc fundefs =
+  emit oc "(table %d anyfunc)\n" (List.length fundefs) ;
+  emit oc "(elem (i32.const 0) %s)\n"
+    (Id.pp_list
+       (List.map
+          (fun { name = Id.Label n, _ ; _ } -> "$" ^ n)
+          fundefs))
+
+
+let emit_types oc sigs =
+  List.iter
+    (function
+      | Type.Fun(args, ret_t), idx ->
+        emit oc "(type %s (func" idx ;
+        List.iter (emit_param oc) args ;
+        emit_result oc ret_t ;
+        emit oc "))\n"
+
+      | _ ->
+        raise (Invalid_argument "emit_funtype"))
+    (TM.bindings sigs)
+
+
+let emit_fundefs oc fundefs =
+  List.iter
+    (function
+      | { name = (Id.Label n, Type.Fun(_, ret_t)) ;
+          args ; formal_fv ; body ; _
+        } ->
+        emit oc "(func $%s" n ;
+        List.iter (emit_label_param oc) args ;
+        emit_result oc ret_t ;
+        emit oc "\n" ;
+        emit_locals oc body ;
+        g oc (M.add_list (args @ formal_fv) M.empty) formal_fv body ;
+        emit oc ")\n"
+
+      | _ ->
+        raise (Invalid_argument "emit_fundef"))
+    fundefs
+
+
 let emit_start oc start =
   emit oc "(func (export \"start\")\n" ;
   emit_locals oc start ;
@@ -355,51 +383,20 @@ let emit_start oc start =
   emit oc ")"
 
 
-let sig_index fundefs =
-  List.fold_left
-    (fun tm (t, idx) -> TM.add t idx tm)
-    TM.empty
-    (fundefs
-     |> List.map (fun { name = (_, ret_t) ; _ } -> ret_t)
-     |> TS.of_list |> TS.to_seq |> List.of_seq
-     |> List.mapi (fun i t -> t, "$" ^ string_of_int i))
-
-
-let fun_infos fundefs sigidx =
-  List.mapi
-    (fun i ({ name = (Id.Label n, t) ; _ } as fundef) ->
-       { id = n
-       ; ty = t
-       ; idx = i
-       ; ty_idx = TM.find t sigidx
-       ; fn = fundef })
-    fundefs
-
-
-let funinfo_name_index fundefs sigidx =
-  M.add_list
-    (List.map (fun e -> e.id, e) (fun_infos fundefs sigidx))
-    M.empty
-
-
-let funinfo_ty_index fundefs sigidx =
-  List.fold_left
-    (fun tm e -> TM.add e.ty e tm)
-    TM.empty
-    (fun_infos fundefs sigidx)
-
+(* emit module *)
 
 let emitcode oc (Prog(fundefs, start)) =
-  let sigidx = sig_index fundefs in
-  funtyindex := funinfo_ty_index fundefs sigidx ;
-  funindex := funinfo_name_index fundefs sigidx ;
-  emit oc "(module\n" ;
-  emit_imports oc () ;
+  let sigs = funsig_index fundefs in
+  let info = infos_of_fundefs fundefs sigs in
+  funindex := funinfo_name_index info ;
+  funtyindex := funinfo_ty_index info ;
+  emit oc "(module\n\n" ;
+  emit_imports oc () ; emit oc "\n" ;
   emit oc "(memory (export \"memory\") 1)\n\n" ;
   emit oc "(global $HP (mut i32) (i32.const 0))\n" ;
   emit oc "(global $CL (mut i32) (i32.const 0))\n\n" ;
   emit_table oc fundefs ; emit oc "\n" ;
-  emit_funtypes oc sigidx ; emit oc "\n" ;
+  emit_types oc sigs ; emit oc "\n" ;
   emit_fundefs oc fundefs ; emit oc "\n" ;
   emit_start oc start ;
   emit oc ")"
