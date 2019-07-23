@@ -18,8 +18,8 @@ type t =
   | FSub of Id.t * Id.t
   | FMul of Id.t * Id.t
   | FDiv of Id.t * Id.t
-  | IfEq of Id.t * Id.t * t * t
-  | IfLE of Id.t * Id.t * t * t
+  | IfEq of Id.t * Id.t * t * t * Type.t
+  | IfLE of Id.t * Id.t * t * t * Type.t
   | Let of (Id.t * Type.t) * t * t
   | Var of Id.t
   | MakeCls of (Id.t * Type.t) * closure * t
@@ -56,23 +56,33 @@ let add_toplevel_fundef f =
 
 
 let rec free_vars = function
-  | Unit | Int(_) | Float(_) | ExtArray(_) ->
+  | Unit
+  | Int _
+  | Float _
+  | ExtArray _ ->
     S.empty
 
-  | Neg(x) | FNeg(x) ->
+  | Neg x
+  | FNeg x ->
     S.singleton x
 
-  | Add(x, y) | Sub(x, y) | FAdd(x, y) | FSub(x, y)
-  | FMul(x, y) | FDiv(x, y) | Get(x, y) ->
+  | Add(x, y)
+  | Sub(x, y)
+  | FAdd(x, y)
+  | FSub(x, y)
+  | FMul(x, y)
+  | FDiv(x, y)
+  | Get(x, y) ->
     S.of_list [x; y]
 
-  | IfEq(x, y, e1, e2)| IfLE(x, y, e1, e2) ->
+  | IfEq(x, y, e1, e2, _)
+  | IfLE(x, y, e1, e2, _) ->
     S.union (free_vars e1) (free_vars e2) |> S.add y |> S.add x
 
   | Let((x, _), e1, e2) ->
     S.union (free_vars e1) (S.remove x (free_vars e2))
 
-  | Var(x) ->
+  | Var x ->
     S.singleton x
 
   | MakeCls((x, _), { entry = _; actual_fv }, e) ->
@@ -128,11 +138,11 @@ let rec g env known = function
   | K.FDiv(x, y) ->
     FDiv(x, y)
 
-  | K.IfEq(x, y, e1, e2) ->
-    IfEq(x, y, g env known e1, g env known e2)
+  | K.IfEq(x, y, e1, e2, t) ->
+    IfEq(x, y, g env known e1, g env known e2, t)
 
-  | K.IfLE(x, y, e1, e2) ->
-    IfLE(x, y, g env known e1, g env known e2)
+  | K.IfLE(x, y, e1, e2, t) ->
+    IfLE(x, y, g env known e1, g env known e2, t)
 
   | K.Let((x, t), e1, e2) ->
     Let((x, t), g env known e1, g (M.add x t env) known e2)

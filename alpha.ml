@@ -42,11 +42,11 @@ let rec g env = function
   | FDiv(x, y) ->
     FDiv(find x env, find y env)
 
-  | IfEq(x, y, e1, e2) ->
-    IfEq(find x env, find y env, g env e1, g env e2)
+  | IfEq(x, y, e1, e2, t) ->
+    IfEq(find x env, find y env, g env e1, g env e2, t)
 
-  | IfLE(x, y, e1, e2) ->
-    IfLE(find x env, find y env, g env e1, g env e2)
+  | IfLE(x, y, e1, e2, t) ->
+    IfLE(find x env, find y env, g env e1, g env e2, t)
 
   | Let((x, t), e1, e2) ->
     let x' = Id.genid x in

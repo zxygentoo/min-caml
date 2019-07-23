@@ -5,8 +5,8 @@ let threshold = ref 0
 
 
 let rec size = function
-  | IfEq(_, _, e1, e2)
-  | IfLE(_, _, e1, e2)
+  | IfEq(_, _, e1, e2, _)
+  | IfLE(_, _, e1, e2, _)
   | Let(_, e1, e2)
   | LetRec({ body = e1; name = _; args = _ }, e2) ->
     1 + size e1 + size e2
@@ -19,11 +19,11 @@ let rec size = function
 
 
 let rec g env = function
-  | IfEq(x, y, e1, e2) ->
-    IfEq(x, y, g env e1, g env e2)
+  | IfEq(x, y, e1, e2, t) ->
+    IfEq(x, y, g env e1, g env e2, t)
 
-  | IfLE(x, y, e1, e2) ->
-    IfLE(x, y, g env e1, g env e2)
+  | IfLE(x, y, e1, e2, t) ->
+    IfLE(x, y, g env e1, g env e2, t)
 
   | Let(xt, e1, e2) ->
     Let(xt, g env e1, g env e2)
@@ -36,7 +36,7 @@ let rec g env = function
     let (zs, e) = M.find x env in
     Format.eprintf "inlining %s@." x;
     let env' = List.fold_left2
-      (fun env' (z, _t) y -> M.add z y env') M.empty zs ys in
+        (fun env' (z, _t) y -> M.add z y env') M.empty zs ys in
     Alpha.g env' e
 
   | LetTuple(xts, y, e) ->

@@ -33,8 +33,8 @@ let smit = Printf.sprintf
 let rec local_vars = function
   | Let(xt, e1, e2) -> xt :: local_vars e1 @ local_vars e2
   | MakeCls(xt, _, e) -> xt :: local_vars e
-  | IfEq(_, _, e1, e2)
-  | IfLE(_, _, e1, e2) -> local_vars e1 @ local_vars e2
+  | IfEq(_, _, e1, e2, _)
+  | IfLE(_, _, e1, e2, _) -> local_vars e1 @ local_vars e2
   | LetTuple(xts, _, e) -> xts @ local_vars e
   | _ -> []
 
@@ -47,7 +47,7 @@ let ofst_of_ty = function
 
 (* convert Type.t to wasm type i32/i64/f32/f64 in string *)
 let rec wt_of_ty env = function
-  | Type.Unit -> failwith "wt_of_ty Unit"
+  | Type.Unit -> ""
   | Type.Float -> "f64"
   | Type.Int
   | Type.Bool
@@ -58,13 +58,12 @@ let rec wt_of_ty env = function
   | Type.Var { contents = Some t } -> wt_of_ty env t
 
 
-let emit_var oc env fvs name =
+let emit_var oc env fvs id =
   let rec emit_var' ofst = function
     | [] ->
-      if M.find name env <> Type.Unit then
-        emit oc "(get_local $%s)\n" name
+      if M.find id env <> Type.Unit then emit oc "(get_local $%s)\n" id
 
-    | (x, t) :: _ when x = name ->
+    | (x, t) :: _ when x = id ->
       if t <> Type.Unit then
         emit oc "(%s.load (i32.add (i32.const %i) (get_global $CL)))\n"
           (wt_of_ty env t) (ofst + (ofst_of_ty t)) ;
@@ -79,15 +78,12 @@ let _emit_vars oc env fvs args =
   List.iter (emit_var oc env fvs) args
 
 
-let _smit_var env fvs name =
+let smit_var env fvs id =
   let rec smit_var' ofst = function
     | [] ->
-      if M.find name env <> Type.Unit then
-        smit "(get_local $%s)\n" name
-      else
-        ""
+      if M.find id env <> Type.Unit then smit "(get_local $%s)\n" id else ""
 
-    | (x, t) :: _ when x = name ->
+    | (x, t) :: _ when x = id ->
       if t <> Type.Unit then
         smit "(%s.load (i32.add (i32.const %i) (get_global $CL)))\n"
           (wt_of_ty env t) (ofst + (ofst_of_ty t))
@@ -100,8 +96,8 @@ let _smit_var env fvs name =
   smit_var' 0 fvs
 
 
-let _smit_vars env fvs args =
-  Id.pp_list (List.map (smit env fvs) args)
+let smit_vars env fvs args =
+  Id.pp_list (List.map (smit_var env fvs) args)
 
 
 let rec g oc env fvs = function
@@ -115,78 +111,50 @@ let rec g oc env fvs = function
     emit oc "(f64.const %f)\n" a
 
   | Neg x ->
-    emit oc "(i32.sub\n(i32.const 0)\n" ;
-    emit_var oc env fvs x ;
-    emit oc ")\n"
+    emit oc "(i32.sub (i32.const 0) %s )\n" (smit_var env fvs x)
 
   | Add(x, y) ->
-    emit oc "(i32.add\n" ;
-    emit_var oc env fvs x ;
-    emit_var oc env fvs y ;
-    emit oc ")\n"
+    emit oc "(i32.add %s %s)\n" (smit_var env fvs x) (smit_var env fvs y)
 
   | Sub(x, y) ->
-    emit oc "(i32.sub\n" ;
-    emit_var oc env fvs x ;
-    emit_var oc env fvs y ;
-    emit oc ")\n"
+    emit oc "(i32.sub %s %s)\n" (smit_var env fvs x) (smit_var env fvs y)
 
   | FNeg x ->
-    emit oc "(f64.sub\n(f64.const 0)\n" ;
-    emit_var oc env fvs x ;
-    emit oc ")\n"
+    emit oc "(f64.sub (f64.const 0) %s)\n" (smit_var env fvs x)
 
   | FAdd(x, y) ->
-    emit oc "(f64.add\n" ;
-    emit_var oc env fvs x ;
-    emit_var oc env fvs y ;
-    emit oc ")\n"
+    emit oc "(f64.add %s %s)\n" (smit_var env fvs x) (smit_var env fvs y)
 
   | FSub(x, y) ->
-    emit oc "(f64.sub\n" ;
-    emit_var oc env fvs x ;
-    emit_var oc env fvs y ;
-    emit oc ")\n"
+    emit oc "(f64.sub %s %s)\n" (smit_var env fvs x) (smit_var env fvs y)
 
   | FMul(x, y) ->
-    emit oc "(f64.mul\n" ;
-    emit_var oc env fvs x ;
-    emit_var oc env fvs y ;
-    emit oc ")\n"
+    emit oc "(f64.mul %s %s)\n" (smit_var env fvs x) (smit_var env fvs y)
 
   | FDiv(x, y)->
-    emit oc "(f64.div\n" ;
-    emit_var oc env fvs x ;
-    emit_var oc env fvs y ;
-    emit oc ")\n"
+    emit oc "(f64.div %s %s)\n" (smit_var env fvs x) (smit_var env fvs y)
 
-  | IfEq(x, _, e1, _) when M.find x env = Type.Unit ->
+  | IfEq(x, _, e1, _, _) when M.find x env = Type.Unit ->
     g oc env fvs e1
 
-  | IfEq(x, y, e1, e2) ->
-    let st = wt_of_ty env (M.find x env) in
-    emit oc "(if (result %s)\n(%s.eq\n" st st ;
-    emit_var oc env fvs x ;
-    emit_var oc env fvs y ;
-    emit oc ")\n(then\n" ;
-    g oc env fvs e1 ;
-    emit oc ")\n(else\n" ;
-    g oc env fvs e2 ;
-    emit oc "))\n"
+  | IfEq(x, y, e1, e2, t) ->
+    let wt_res = wt_of_ty env t in
+    let wt_cmp = wt_of_ty env (M.find x env) in
+    emit oc "(if (result %s) (%s.eq %s %s)\n"
+      wt_res wt_cmp (smit_var env fvs x) (smit_var env fvs y) ;
+    emit oc "(then\n" ; g oc env fvs e1 ; emit oc ")\n" ;
+    emit oc "(else\n" ; g oc env fvs e2 ; emit oc "))\n"
 
-  | IfLE(x, _, e1, _) when M.find x env = Type.Unit ->
+  | IfLE(x, _, e1, _, _) when M.find x env = Type.Unit ->
     g oc env fvs e1
 
-  | IfLE(x, y, e1, e2) ->
-    let st = wt_of_ty env (M.find x env) in
-    emit oc "(if (result %s)\n(%s.le_s\n" st st ;
-    emit_var oc env fvs x ;
-    emit_var oc env fvs y ;
-    emit oc ")\n(then\n" ;
-    g oc env fvs e1 ;
-    emit oc ")\n(else\n" ;
-    g oc env fvs e2 ;
-    emit oc "))\n"
+  | IfLE(x, y, e1, e2, t) ->
+    let wt_res = wt_of_ty env t in
+    let wt_cmp = wt_of_ty env (M.find x env) in
+    emit oc "(if (result %s) (%s.le_s %s %s)\n"
+      wt_res wt_cmp (smit_var env fvs x) (smit_var env fvs y) ;
+    emit oc "(then\n" ; g oc env fvs e1 ; emit oc ")\n" ;
+    emit oc "(else\n" ; g oc env fvs e2 ; emit oc "))\n"
 
   | Let((id, Type.Unit), e1, e2) ->
     g oc env fvs e1 ;
@@ -199,59 +167,93 @@ let rec g oc env fvs = function
   | Var v ->
     emit_var oc env fvs v
 
-  | MakeCls((name, t), { entry = Id.Label(n) ; actual_fv }, e) ->
+  | MakeCls((id, t), { entry = Id.Label(n) ; actual_fv }, e) ->
     let info = M.find n !funindex in
-    let offsets = List.map (fun (_, t) -> ofst_of_ty t) info.fn.formal_fv in
-    (* get HP *)
-    emit oc "(set_local $%s (get_global $HP))\n" name ;
-    (* allocate memory *)
-    emit oc "(set_global $HP (i32.add (i32.const %i) (get_global $HP)))\n"
-      (List.fold_left (+) 4 offsets) ;
-    (* store function pointer *)
-    emit oc "(i32.store (get_local $%s) (i32.const %i))\n" name info.idx ;
-    (* store free vars *)
+    let fvos = List.map (fun (_, t) -> ofst_of_ty t) info.fn.formal_fv in
+    let size = (List.fold_left (+) 4 fvos) in
+    emit oc
+      "(; get HP ;)\n\
+       (set_local $%s (get_global $HP))\n\
+       (; allocate memory ;)\n\
+       (set_global $HP (i32.add (i32.const %i) (get_global $HP)))\n\
+       (; store func pointer ;)\n\
+       (i32.store (get_local $%s) (i32.const %i))\n\
+       (; store free vars ;)\n"
+      id size id info.idx
+    ;
     let cur = ref 0 in
     List.iter2
       (fun offset fv ->
          cur := !cur + offset ;
-         emit oc "(i32.store " ;
-         emit oc "(i32.add (i32.const %i) (get_local $%s)) " !cur name ;
-         emit oc "(get_local $%s))\n" fv ;
-      )
-      offsets
-      actual_fv ;
-    g oc (M.add name t env) fvs e
+         emit oc "(i32.store (i32.add (i32.const %i) (get_local $%s)) %s)\n"
+           !cur id (smit_var env fvs fv))
+      fvos actual_fv
+    ;
+    g oc (M.add id t env) fvs e
 
   | AppCls(name, args) when M.mem name env ->
-    (* backup CL *)
-    emit oc "(set_local $$cl_bak (get_global $CL))\n" ;
-    (* move CL *)
-    emit oc "(set_global $CL " ; emit_var oc env fvs name ; emit oc ")\n" ;
-    emit oc "(call_indirect (type %s)\n"
-      (TM.find (M.find name env) !funtyindex).ty_idx ;
-    List.iter (emit_var oc env fvs) args ;
-    emit oc "(i32.load (get_global $CL)))\n" ;
-    (* restore CL *)
-    emit oc "(set_global $CL (get_local $$cl_bak))\n"
+    emit oc
+      "(; backup CL ;)\n\
+       (set_local $$cl_bak (get_global $CL))\n\
+       (; register cls address to CL ;)\n\
+       (set_global $CL %s)\n\
+       (call_indirect (type %s)\n\
+       (; free vars ;)\n\
+       %s\n\
+       (; func pointer ;)\n\
+       (i32.load (get_global $CL)))\n\
+       (; restore CL ;)\n\
+       (set_global $CL (get_local $$cl_bak))\n"
+      (smit_var env fvs name)
+      (TM.find (M.find name env) !funtyindex).ty_idx
+      (smit_vars env fvs args)
 
   | AppCls(name, args) when M.mem name !funindex ->
     (* for indirect recursive call *)
-    let fun_info = (M.find name !funindex) in
-    emit oc "(set_local $$cl_bak (get_global $CL))\n" ;
-    emit oc "(set_global $CL (i32.const %i))" fun_info.idx ;
-    emit oc "(call_indirect (type %s)\n" fun_info.ty_idx ;
-    List.iter (emit_var oc env fvs) args ;
-    emit oc "(i32.const %i))\n" fun_info.idx ;
-    emit oc "(set_global $CL (get_local $$cl_bak))\n"
+    let info = (M.find name !funindex) in
+    emit oc 
+      "(; backup CL ;)\n\
+       (set_local $$cl_bak (get_global $CL))\n\
+       (; register fun_idx to CL ;)\n\
+       (set_global $CL (i32.const %i))\n\
+       (call_indirect (type %s)\n\
+       (; free vars ;)\n\
+       %s\
+       (; func pointer ;)\n\
+       (i32.const %i))\n\
+       (; restore CL ;)\n\
+       (set_global $CL (get_local $$cl_bak))\n"
+      info.idx
+      info.ty_idx
+      (smit_vars env fvs args)
+      info.idx
 
   | AppCls(name, _)  ->
     failwith ("'AppCls: " ^ name ^ "' is neither local or function.")
 
-  | AppDir(Id.Label "min_caml_create_array", [_; a])
+  | AppDir(Id.Label "min_caml_make_array", [_; a])
     when M.mem a env && M.find a env = Type.Unit ->
     ()
 
-  | AppDir(Id.Label "min_caml_create_array", [n; a]) ->
+  | AppDir(Id.Label "min_caml_make_array", [n; a]) when M.mem a !funindex ->
+    emit oc "(set_local $$counter (i32.const 0))\n" ;
+    emit oc "(block\n(loop\n" ;
+    emit oc "(br_if 1 (i32.eq (get_local $$counter)\n" ;
+    emit_var oc env fvs n ;
+    emit oc "))\n" ;
+    emit oc "(i32.store\n(get_global $HP)\n" ;
+    emit oc "(i32.const %i)\n" (M.find a !funindex).idx ;
+    emit oc ")\n" ;
+    emit oc "(set_global $HP (i32.add (i32.const 4) (get_global $HP)))\n" ;
+    emit oc "(set_local $$counter\n" ;
+    emit oc "(i32.add (get_local $$counter) (i32.const 1)))\n" ;
+    emit oc "(br 0)\n" ;
+    emit oc "))\n" ;
+    emit oc "(i32.sub (get_global $HP) (i32.mul (i32.const 4)\n" ;
+    emit_var oc env fvs n ;
+    emit oc "))\n" ;
+
+  | AppDir(Id.Label "min_caml_make_array", [n; a]) ->
     emit oc "(set_local $$counter (i32.const 0))\n" ;
     emit oc "(block\n(loop\n" ;
     emit oc "(br_if 1 (i32.eq (get_local $$counter)\n" ;
@@ -269,7 +271,7 @@ let rec g oc env fvs = function
     emit_var oc env fvs n ;
     emit oc "))\n" ;
 
-  | AppDir(Id.Label "min_caml_create_float_array", [n; a]) ->
+  | AppDir(Id.Label "min_caml_make_float_array", [n; a]) ->
     emit oc "(set_local $$counter (i32.const 0))\n" ;
     emit oc "(block\n(loop\n" ;
     emit oc "(br_if 1 (i32.eq (get_local $$counter)\n" ;
@@ -287,14 +289,12 @@ let rec g oc env fvs = function
     emit_var oc env fvs n ;
     emit oc "))\n" ;
 
-  | AppDir(Id.Label "min_caml_create_array", _)
-  | AppDir(Id.Label "min_caml_create_float_array", _) ->
+  | AppDir(Id.Label "min_caml_make_array", _)
+  | AppDir(Id.Label "min_caml_make_float_array", _) ->
     failwith "wrong number of arguments for array creation."
 
   | AppDir(Id.Label name, args) ->
-    emit oc "(call $%s\n" name ;
-    List.iter (emit_var oc env fvs) args ;
-    emit oc ")\n"
+    emit oc "(call $%s %s)\n" name (smit_vars env fvs args)
 
   | Tuple xs ->
     (* current offset *)
@@ -303,54 +303,49 @@ let rec g oc env fvs = function
     let xs' = List.rev xs in
     let ts = List.map (fun x -> M.find x env) xs' in
     let offsets = List.map ofst_of_ty ts in
-    let total_ofst = List.fold_left (+) 0 offsets in
     let tos = List.map2 (fun t o -> (t, o)) ts offsets in
-    emit oc "(set_global $HP (i32.add (i32.const %i) (get_global $HP)))\n"
-      total_ofst;
+    emit oc
+      "(set_global $HP (i32.add (i32.const %i) (get_global $HP)))\n"
+      (List.fold_left (+) 0 offsets)
+    ;
     List.iter2
       (fun x (t, o) ->
          cur := !cur + o ;
-         emit oc "(%s.store" (wt_of_ty env t) ;
-         emit oc "(i32.sub (get_global $HP) (i32.const %i))\n" !cur ;
-         emit_var oc env fvs x ;
-         emit oc ")\n")
+         emit oc
+           "(%s.store (i32.sub (get_global $HP) (i32.const %i)) %s)\n"
+           (wt_of_ty env t) !cur (smit_var env fvs x))
       xs'
-      tos ;
+      tos
+    ;
     emit oc "(i32.sub (get_global $HP) (i32.const %i))\n" !cur ;
 
   | LetTuple(xts, y, e) ->
-    (* current offset *)
     let cur = ref 0 in
     List.iter
       (fun (x, t) ->
-         emit oc "(set_local $%s\n" x ;
-         emit oc "(%s.load\n(i32.add (i32.const %i) " (wt_of_ty env t) !cur ;
-         emit_var oc env fvs y ;
-         emit oc ")))\n" ;
+         emit oc 
+           "(set_local $%s (%s.load (i32.add (i32.const %i) %s)))\n"
+           x
+           (wt_of_ty env t)
+           !cur
+           (smit_var env fvs y)
+         ;
          cur := !cur + (ofst_of_ty t))
       xts ;
     g oc (M.add_list xts env) fvs e
 
   | Get(x, y) ->
     begin match M.find x env with
-      | Type.Array(Type.Unit) ->
+      | Type.Array Type.Unit ->
         ()
 
-      | Type.Array(Type.Float) ->
-        emit oc "(f64.load\n(i32.add\n" ;
-        emit oc "(i32.mul\n(i32.const 8)\n" ;
-        emit_var oc env fvs x ;
-        emit oc ")\n" ;
-        emit_var oc env fvs y ;
-        emit oc "))\n"
-
-      | Type.Array(_) ->
-        emit oc "(i32.load\n(i32.add\n" ;
-        emit oc "(i32.mul\n(i32.const 4)\n" ;
-        emit_var oc env fvs x ;
-        emit oc ")\n" ;
-        emit_var oc env fvs y ;
-        emit oc "))\n"
+      | Type.Array t ->
+        emit oc
+          "(%s.load (i32.add (i32.mul (i32.const %i) %s) %s))\n"
+          (wt_of_ty env t)
+          (ofst_of_ty t)
+          (smit_var env fvs y)
+          (smit_var env fvs x)
 
       | _ ->
         failwith "Get: first argument is not Array."
@@ -358,24 +353,17 @@ let rec g oc env fvs = function
 
   | Put(x, y, z) ->
     begin match M.find x env with
-      | Type.Array(Type.Unit) ->
+      | Type.Array Type.Unit ->
         ()
 
-      | Type.Array(Type.Float) ->
-        emit oc "(f64.store\n(i32.add\n" ;
-        emit_var oc env fvs x ;
-        emit_var oc env fvs y ;
-        emit oc ")" ;
-        emit_var oc env fvs z ;
-        emit oc ")\n"
-
-      | Type.Array(_) ->
-        emit oc "(i32.store\n(i32.add\n" ;
-        emit_var oc env fvs x ;
-        emit_var oc env fvs y ;
-        emit oc ")" ;
-        emit_var oc env fvs z ;
-        emit oc ")\n"
+      | Type.Array t ->
+        emit oc
+          "(%s.store (i32.add (i32.mul (i32.const %i) %s) %s) %s)\n"
+          (wt_of_ty env t)
+          (ofst_of_ty t)
+          (smit_var env fvs y)
+          (smit_var env fvs x)
+          (smit_var env fvs z)
 
       | _ ->
         failwith "Put: first argument is not Array."
@@ -443,9 +431,8 @@ let emit_param oc = function
   | t -> emit oc " (param %s)" (wt_of_ty M.empty t)
 
 
-let emit_result oc = function
-  | Type.Unit -> ()
-  | t -> emit oc " (result %s)" (wt_of_ty M.empty t)
+let emit_result oc t =
+  emit oc " (result %s)" (wt_of_ty M.empty t)
 
 
 (* emit module sections *)
@@ -511,6 +498,7 @@ let emit_fundefs oc fundefs =
 
 let emit_start oc start =
   emit oc "(func (export \"start\")\n" ;
+  (* emit oc "(func (export \"start\") (result f64)\n" ; *)
   emit_locals oc start ;
   g oc M.empty [] start ;
   emit oc ")"

@@ -3,8 +3,8 @@ open Knormal
 
 let rec effect = function
   | Let(_, e1, e2)
-  | IfEq(_, _, e1, e2)
-  | IfLE(_, _, e1, e2) ->
+  | IfEq(_, _, e1, e2, _)
+  | IfLE(_, _, e1, e2, _) ->
     effect e1 || effect e2
 
   | LetRec(_, e)
@@ -21,11 +21,11 @@ let rec effect = function
 
 
 let rec f = function
-  | IfEq(x, y, e1, e2) ->
-    IfEq(x, y, f e1, f e2)
+  | IfEq(x, y, e1, e2, t) ->
+    IfEq(x, y, f e1, f e2, t)
 
-  | IfLE(x, y, e1, e2) ->
-    IfLE(x, y, f e1, f e2)
+  | IfLE(x, y, e1, e2, t) ->
+    IfLE(x, y, f e1, f e2, t)
 
   | Let((x, t), e1, e2) ->
     let e1' = f e1 in
