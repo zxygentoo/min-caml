@@ -453,12 +453,10 @@ let emit_types oc sigs =
 let emit_fundefs oc fundefs =
   List.iter
     (function
-      | { name = (Id.Label n, Type.Fun(_, ret_t))
-        ; args ; formal_fv ; body
-        } ->
+      | { name = (Id.Label n, Type.Fun(_, t)) ; args ; formal_fv ; body } ->
         emit oc "(func $%s" n ;
         List.iter (emit_label_param oc) args ;
-        emit_result oc ret_t ;
+        emit_result oc t ;
         emit oc "\n" ;
         emit_locals oc body ;
         g oc (M.add_list (args @ formal_fv) M.empty) formal_fv body ;
