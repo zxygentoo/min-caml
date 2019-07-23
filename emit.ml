@@ -427,13 +427,12 @@ let emit_imports oc () =
     ]
 
 
-let emit_table oc fundefs =
+let emit_table oc fds =
   emit oc
     "(table %d anyfunc)\n\
      (elem (i32.const 0) %s)\n"
     (List.length fundefs)
-    (Id.pp_list
-      (List.map (fun { name = Id.Label n, _ ; _ } -> "$" ^ n) fundefs))
+    (Id.pp_list (List.map (fun { name = Id.Label n, _ ; _ } -> "$" ^ n) fds))
 
 
 let emit_types oc sigs =
