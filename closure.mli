@@ -1,7 +1,7 @@
-type closure = {
-  entry : Id.label;
-  actual_fv : Id.t list;
-}
+type closure =
+  { entry : Id.label
+  ; actual_fv : Id.t list
+  }
 
 type t =
   | Unit
@@ -28,12 +28,12 @@ type t =
   | Put of Id.t * Id.t * Id.t
   | ExtArray of Id.label
 
-type fundef = {
-  name : Id.label * Type.t;
-  args : (Id.t * Type.t) list;
-  formal_fv : (Id.t * Type.t) list;
-  body : t
-}
+type fundef =
+  { name : Id.label * Type.t
+  ; args : (Id.t * Type.t) list
+  ; formal_fv : (Id.t * Type.t) list
+  ; body : t
+  }
 
 type prog = Prog of fundef list * t
 

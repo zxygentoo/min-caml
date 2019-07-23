@@ -1,9 +1,9 @@
 module K = Knormal
 
-type closure = {
-  entry : Id.label;
-  actual_fv : Id.t list
-} 
+type closure =
+  { entry : Id.label
+  ; actual_fv : Id.t list
+  }
 [@@deriving show]
 
 type t =
@@ -32,15 +32,16 @@ type t =
   | ExtArray of Id.label
 [@@deriving show]
 
-type fundef = {
-  name : Id.label * Type.t;
-  args : (Id.t * Type.t) list;
-  formal_fv : (Id.t * Type.t) list;
-  body : t
-}
+type fundef =
+  { name : Id.label * Type.t
+  ; args : (Id.t * Type.t) list
+  ; formal_fv : (Id.t * Type.t) list
+  ; body : t
+  }
 [@@deriving show]
 
-type prog = Prog of fundef list * t [@@deriving show]
+type prog = Prog of fundef list * t
+[@@deriving show]
 
 
 let toplevel : fundef list ref = ref []
@@ -239,6 +240,5 @@ let flattern e =
   toplevel := [];
   let e' = g M.empty S.empty e in
   let prog = Prog(List.rev !toplevel, e') in
-  Printf.eprintf "------------------------------\n" ;
   Printf.eprintf "==> Clourse Prog: \n%s\n" (show_prog prog) ;
   prog
