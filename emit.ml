@@ -58,26 +58,6 @@ let rec wt_of_ty env = function
   | Type.Var { contents = Some t } -> wt_of_ty env t
 
 
-let emit_var oc env fvs id =
-  let rec emit_var' ofst = function
-    | [] ->
-      if M.find id env <> Type.Unit then emit oc "(get_local $%s)\n" id
-
-    | (x, t) :: _ when x = id ->
-      if t <> Type.Unit then
-        emit oc "(%s.load (i32.add (i32.const %i) (get_global $CL)))\n"
-          (wt_of_ty env t) (ofst + (ofst_of_ty t)) ;
-
-    | (_, t) :: xs  ->
-      emit_var' (ofst + (ofst_of_ty t)) xs
-  in
-  emit_var' 0 fvs
-
-
-let _emit_vars oc env fvs args =
-  List.iter (emit_var oc env fvs) args
-
-
 let smit_var env fvs id =
   let rec smit_var' ofst = function
     | [] ->
@@ -98,6 +78,10 @@ let smit_var env fvs id =
 
 let smit_vars env fvs args =
   Id.pp_list (List.map (smit_var env fvs) args)
+
+
+let emit_var oc env fvs id =
+  emit oc "%s" (smit_var env fvs id)
 
 
 let rec g oc env fvs = function
@@ -297,22 +281,18 @@ let rec g oc env fvs = function
     emit oc "(call $%s %s)\n" name (smit_vars env fvs args)
 
   | Tuple xs ->
-    (* current offset *)
-    let cur = ref 0 in
     (* reverse order *)
     let xs' = List.rev xs in
     let ts = List.map (fun x -> M.find x env) xs' in
     let offsets = List.map ofst_of_ty ts in
     let tos = List.map2 (fun t o -> (t, o)) ts offsets in
-    emit oc
-      "(set_global $HP (i32.add (i32.const %i) (get_global $HP)))\n"
-      (List.fold_left (+) 0 offsets)
-    ;
+    emit oc "(set_global $HP (i32.add (i32.const %i) (get_global $HP)))\n"
+      (List.fold_left (+) 0 offsets) ;
+    let cur = ref 0 in
     List.iter2
       (fun x (t, o) ->
          cur := !cur + o ;
-         emit oc
-           "(%s.store (i32.sub (get_global $HP) (i32.const %i)) %s)\n"
+         emit oc "(%s.store (i32.sub (get_global $HP) (i32.const %i)) %s)\n"
            (wt_of_ty env t) !cur (smit_var env fvs x))
       xs'
       tos
@@ -323,13 +303,8 @@ let rec g oc env fvs = function
     let cur = ref 0 in
     List.iter
       (fun (x, t) ->
-         emit oc 
-           "(set_local $%s (%s.load (i32.add (i32.const %i) %s)))\n"
-           x
-           (wt_of_ty env t)
-           !cur
-           (smit_var env fvs y)
-         ;
+         emit oc "(set_local $%s (%s.load (i32.add (i32.const %i) %s)))\n"
+           x (wt_of_ty env t) !cur (smit_var env fvs y) ;
          cur := !cur + (ofst_of_ty t))
       xts ;
     g oc (M.add_list xts env) fvs e
@@ -340,8 +315,7 @@ let rec g oc env fvs = function
         ()
 
       | Type.Array t ->
-        emit oc
-          "(%s.load (i32.add (i32.mul (i32.const %i) %s) %s))\n"
+        emit oc "(%s.load (i32.add (i32.mul (i32.const %i) %s) %s))\n"
           (wt_of_ty env t)
           (ofst_of_ty t)
           (smit_var env fvs y)
@@ -357,8 +331,7 @@ let rec g oc env fvs = function
         ()
 
       | Type.Array t ->
-        emit oc
-          "(%s.store (i32.add (i32.mul (i32.const %i) %s) %s) %s)\n"
+        emit oc "(%s.store (i32.add (i32.mul (i32.const %i) %s) %s) %s)\n"
           (wt_of_ty env t)
           (ofst_of_ty t)
           (smit_var env fvs y)
@@ -385,14 +358,10 @@ let funsig_index fundefs =
      |> List.mapi (fun i t -> t, "$" ^ string_of_int i))
 
 
-let infos_of_fundefs fundefs sigidx =
+let infos_of_fundefs fundefs sigs =
   List.mapi
     (fun i ({ name = (Id.Label n, t) ; _ } as fundef) ->
-       { id = n
-       ; ty = t
-       ; idx = i
-       ; ty_idx = TM.find t sigidx
-       ; fn = fundef })
+       { id = n ; ty = t ; idx = i ; ty_idx = TM.find t sigs ; fn = fundef })
     fundefs
 
 
@@ -458,9 +427,7 @@ let emit_table oc fundefs =
   emit oc "(table %d anyfunc)\n" (List.length fundefs) ;
   emit oc "(elem (i32.const 0) %s)\n"
     (Id.pp_list
-       (List.map
-          (fun { name = Id.Label n, _ ; _ } -> "$" ^ n)
-          fundefs))
+       (List.map (fun { name = Id.Label n, _ ; _ } -> "$" ^ n) fundefs))
 
 
 let emit_types oc sigs =
