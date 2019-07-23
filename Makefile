@@ -34,7 +34,6 @@ sum-tail.ml \
 toomanyargs.ml \
 # --------- FAIL TESTS -----------
 # matmul.ml \
-# float.ml \
 
 
 TESTS   = $(addprefix $(TESTSDIR)/,$(SOURCES))
