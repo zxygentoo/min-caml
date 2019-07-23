@@ -122,10 +122,11 @@ let rec g oc env fvs = function
     g oc env fvs e1
 
   | IfEq(x, y, e1, e2, t) ->
-    let wt_res = wt_of_ty env t in
-    let wt_cmp = wt_of_ty env (M.find x env) in
     emit oc "(if (result %s) (%s.eq %s %s)\n"
-      wt_res wt_cmp (smit_var env fvs x) (smit_var env fvs y) ;
+      (wt_of_ty env)
+      (wt_of_ty env (M.find x env))
+      (smit_var env fvs x)
+      (smit_var env fvs y) ;
     emit oc "(then\n" ; g oc env fvs e1 ; emit oc ")\n" ;
     emit oc "(else\n" ; g oc env fvs e2 ; emit oc "))\n"
 
@@ -133,10 +134,11 @@ let rec g oc env fvs = function
     g oc env fvs e1
 
   | IfLE(x, y, e1, e2, t) ->
-    let wt_res = wt_of_ty env t in
-    let wt_cmp = wt_of_ty env (M.find x env) in
     emit oc "(if (result %s) (%s.le_s %s %s)\n"
-      wt_res wt_cmp (smit_var env fvs x) (smit_var env fvs y) ;
+      (wt_of_ty env t)
+      (wt_of_ty env (M.find x env))
+      (smit_var env fvs x)
+      (smit_var env fvs y) ;
     emit oc "(then\n" ; g oc env fvs e1 ; emit oc ")\n" ;
     emit oc "(else\n" ; g oc env fvs e2 ; emit oc "))\n"
 
@@ -163,16 +165,15 @@ let rec g oc env fvs = function
        (; store func pointer ;)\n\
        (i32.store (get_local $%s) (i32.const %i))\n\
        (; store free vars ;)\n"
-      id size id info.idx
-    ;
+      id size id info.idx ;
     let cur = ref 0 in
     List.iter2
       (fun offset fv ->
          cur := !cur + offset ;
          emit oc "(i32.store (i32.add (i32.const %i) (get_local $%s)) %s)\n"
            !cur id (smit_var env fvs fv))
-      fvos actual_fv
-    ;
+      fvos
+      actual_fv ;
     g oc (M.add id t env) fvs e
 
   | AppCls(name, args) when M.mem name env ->
@@ -297,8 +298,7 @@ let rec g oc env fvs = function
          emit oc "(%s.store (i32.sub (get_global $HP) (i32.const %i)) %s)\n"
            (wt_of_ty env t) !cur (smit_var env fvs x))
       xs'
-      tos
-    ;
+      tos ;
     emit oc "(i32.sub (get_global $HP) (i32.const %i))\n" !cur ;
 
   | LetTuple(xts, y, e) ->
@@ -428,10 +428,12 @@ let emit_imports oc () =
 
 
 let emit_table oc fundefs =
-  emit oc "(table %d anyfunc)\n" (List.length fundefs) ;
-  emit oc "(elem (i32.const 0) %s)\n"
+  emit oc
+    "(table %d anyfunc)\n\
+     (elem (i32.const 0) %s)\n"
+    (List.length fundefs)
     (Id.pp_list
-       (List.map (fun { name = Id.Label n, _ ; _ } -> "$" ^ n) fundefs))
+      (List.map (fun { name = Id.Label n, _ ; _ } -> "$" ^ n) fundefs))
 
 
 let emit_types oc sigs =
@@ -451,8 +453,8 @@ let emit_types oc sigs =
 let emit_fundefs oc fundefs =
   List.iter
     (function
-      | { name = (Id.Label n, Type.Fun(_, ret_t)) ;
-          args ; formal_fv ; body ; _
+      | { name = (Id.Label n, Type.Fun(_, ret_t))
+        ; args ; formal_fv ; body
         } ->
         emit oc "(func $%s" n ;
         List.iter (emit_label_param oc) args ;
@@ -468,11 +470,10 @@ let emit_fundefs oc fundefs =
 
 
 let emit_start oc start =
-  emit oc "(func (export \"start\")\n" ;
-  (* emit oc "(func (export \"start\") (result f64)\n" ; *)
-  emit_locals oc start ;
-  g oc M.empty [] start ;
-  emit oc ")"
+  emit_fundefs oc
+    { name = (Id.Label "start", Type.Fun([], Type.Unit))
+    ; args = [] ; formal_fv = [] ; body = start } ;
+  emit oc "(export \"start\" (func $start))"
 
 
 (* emit module *)
