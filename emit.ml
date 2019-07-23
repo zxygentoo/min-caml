@@ -75,20 +75,24 @@ let emit_var oc env fvs name =
   emit_var' 0 fvs
 
 
-let emit_vars oc env fvs args =
+let _emit_vars oc env fvs args =
   List.iter (emit_var oc env fvs) args
 
 
-let smit_var env fvs name =
+let _smit_var env fvs name =
   let rec smit_var' ofst = function
     | [] ->
       if M.find name env <> Type.Unit then
         smit "(get_local $%s)\n" name
+      else
+        ""
 
     | (x, t) :: _ when x = name ->
       if t <> Type.Unit then
         smit "(%s.load (i32.add (i32.const %i) (get_global $CL)))\n"
-          (wt_of_ty env t) (ofst + (ofst_of_ty t)) ;
+          (wt_of_ty env t) (ofst + (ofst_of_ty t))
+      else
+        ""
 
     | (_, t) :: xs  ->
       smit_var' (ofst + (ofst_of_ty t)) xs
@@ -96,7 +100,7 @@ let smit_var env fvs name =
   smit_var' 0 fvs
 
 
-let smit_vars env fvs args =
+let _smit_vars env fvs args =
   Id.pp_list (List.map (smit env fvs) args)
 
 
