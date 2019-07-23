@@ -490,9 +490,9 @@ let emit_start oc start =
 
 let emitcode oc (Prog(fundefs, start)) =
   let sigs = funsig_index fundefs in
-  let info = infos_of_fundefs fundefs sigs in
-  funindex := funinfo_name_index info ;
-  funtyindex := funinfo_ty_index info ;
+  let infos = infos_of_fundefs fundefs sigs in
+  funindex := funinfo_name_index infos ;
+  funtyindex := funinfo_ty_index infos ;
   emit oc "(module\n" ;
   emit_imports oc ;
   emit_memory oc ;
