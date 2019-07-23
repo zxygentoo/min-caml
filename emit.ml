@@ -493,7 +493,7 @@ let emitcode oc (Prog(fundefs, start)) =
   let info = infos_of_fundefs fundefs sigs in
   funindex := funinfo_name_index info ;
   funtyindex := funinfo_ty_index info ;
-  emit oc "(module\n\n" ;
+  emit oc "(module\n" ;
   emit_imports oc ;
   emit_memory oc ;
   emit_globals oc ;
