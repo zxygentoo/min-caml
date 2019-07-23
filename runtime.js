@@ -5,7 +5,7 @@ const fs = require('fs');
 
 const coreFunctions = {
     core: {
-        print_int: i => process.stdout.write(String(i)), // no newline
+        print_int: i => process.stdout.write(String(i)),
         print_newline: () => console.log(),
         abs_float: a => Math.abs(a),
         sqrt: a => Math.sqrt(a),
