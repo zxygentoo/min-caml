@@ -3,7 +3,7 @@
 const fs = require('fs');
 
 
-const coreFunctions = {
+const core = {
     core: {
         print_int:      i => process.stdout.write(String(i)),
         print_newline:  _ => console.log(),
@@ -13,17 +13,17 @@ const coreFunctions = {
         sin:            a => Math.sin(a),
         float_of_int:   i => i,
         int_of_float:   a => a|0,
-        truncate:       a => a|0,
+        truncate:       a => a|0
     }
 };
 
 
-const run = source => {
+const run = srs => {
     return WebAssembly.instantiate(
-        new Uint8Array(fs.readFileSync(source)),
-        coreFunctions
-    ).then(module => {
-        module.instance.exports.start();
+        new Uint8Array(fs.readFileSync(src)),
+        core
+    ).then(mod => {
+        mod.instance.exports.start();
     }).catch(e => {
         console.log(e);
     });
