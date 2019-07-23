@@ -410,7 +410,7 @@ let emit_result oc t =
 
 (* emit module sections *)
 
-let emit_imports oc () =
+let emit_imports oc =
   List.iter
     (fun (n, s) ->
        emit oc "(func $min_caml_%s (import \"core\" \"%s\") %s)\n" n n s)
@@ -425,6 +425,19 @@ let emit_imports oc () =
       ("int_of_float",  "(param f64) (result i32)") ;
       ("truncate",      "(param f64) (result i32)")
     ]
+
+
+let emit_memory oc =
+  emit oc "(memory (export \"memory\") 1)\n"
+
+
+let emit_globals oc =
+  (* heap pointer *)
+  emit oc "(global $HP (mut i32) (i32.const 0))\n" ;
+  (* closure pointer *)
+  emit oc "(global $CL (mut i32) (i32.const 0))\n" ;
+  (* generic 32-bit register, mainly use for looping *)
+  emit oc "(global $CL (mut i32) (i32.const 0))\n"
 
 
 let emit_table oc fds =
@@ -481,12 +494,11 @@ let emitcode oc (Prog(fundefs, start)) =
   funindex := funinfo_name_index info ;
   funtyindex := funinfo_ty_index info ;
   emit oc "(module\n\n" ;
-  emit_imports oc () ; emit oc "\n" ;
-  emit oc "(memory (export \"memory\") 1)\n\n" ;
-  emit oc "(global $HP (mut i32) (i32.const 0))\n" ;
-  emit oc "(global $CL (mut i32) (i32.const 0))\n\n" ;
-  emit_table oc fundefs ; emit oc "\n" ;
-  emit_types oc sigs ; emit oc "\n" ;
-  emit_fundefs oc fundefs ; emit oc "\n" ;
+  emit_imports oc ;
+  emit_memory oc ;
+  emit_globals oc ;
+  emit_table oc fundefs ;
+  emit_types oc sigs ;
+  emit_fundefs oc fundefs ;
   emit_start oc start ;
   emit oc ")"
