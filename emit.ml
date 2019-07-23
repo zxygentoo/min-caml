@@ -145,7 +145,7 @@ let rec g oc env fvs = function
     g oc (M.add id Type.Unit env) fvs e2
 
   | Let((id, t), e1, e2) ->
-    emit oc "(set_local $%s\n" id ; g oc env fvs e1 ; emit oc ")\n" ;
+    emit oc "(set_local $%s " id ; g oc env fvs e1 ; emit oc ")\n" ;
     g oc (M.add id t env) fvs e2
 
   | Var v ->
@@ -220,6 +220,7 @@ let rec g oc env fvs = function
     ()
 
   | AppDir(Id.Label "min_caml_make_array", [n; a]) when M.mem a !funindex ->
+    (* function array *)
     emit oc "(set_local $$counter (i32.const 0))\n" ;
     emit oc "(block\n(loop\n" ;
     emit oc "(br_if 1 (i32.eq (get_local $$counter)\n" ;
@@ -269,7 +270,8 @@ let rec g oc env fvs = function
     emit oc "(i32.add (get_local $$counter) (i32.const 1)))\n" ;
     emit oc "(br 0)\n" ;
     emit oc "))\n" ;
-    emit oc "(i32.sub (get_global $HP) (i32.mul (i32.const 8)\n" ;
+    emit oc "(i32.sub (get_global $HP) " ;
+    emit oc "(i32.mul (i32.const 8) " ;
     emit_var oc env fvs n ;
     emit oc "))\n" ;
 
@@ -315,7 +317,8 @@ let rec g oc env fvs = function
         ()
 
       | Type.Array t ->
-        emit oc "(%s.load (i32.add (i32.mul (i32.const %i) %s) %s))\n"
+        emit oc
+          "(%s.load (i32.add (i32.mul (i32.const %i) %s) %s))\n"
           (wt_of_ty env t)
           (ofst_of_ty t)
           (smit_var env fvs y)
@@ -331,7 +334,8 @@ let rec g oc env fvs = function
         ()
 
       | Type.Array t ->
-        emit oc "(%s.store (i32.add (i32.mul (i32.const %i) %s) %s) %s)\n"
+        emit oc
+          "(%s.store (i32.add (i32.mul (i32.const %i) %s) %s) %s)\n"
           (wt_of_ty env t)
           (ofst_of_ty t)
           (smit_var env fvs y)
