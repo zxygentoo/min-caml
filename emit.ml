@@ -437,7 +437,7 @@ let emit_globals oc =
   (* closure pointer *)
   emit oc "(global $CL (mut i32) (i32.const 0))\n" ;
   (* generic 32-bit register, mainly use for looping *)
-  emit oc "(global $CL (mut i32) (i32.const 0))\n"
+  emit oc "(global $GI (mut i32) (i32.const 0))\n"
 
 
 let emit_table oc fds =
