@@ -1,6 +1,6 @@
-'use strict';
+"use strict";
 
-const fs = require('fs');
+const fs = require("fs");
 const wabt = require("wabt")();
 
 
@@ -19,23 +19,11 @@ const core = {
 };
 
 
-const run_wasm = src => {
-    return WebAssembly.instantiate(
-        new Uint8Array(fs.readFileSync(src)),
-        core
-    ).then(mod => {
-        mod.instance.exports.start();
-    }).catch(e => {
-        console.log(e);
-    });
-};
-
-
-const run_wat = src => {
+const run_wat = filename => {
     return WebAssembly.instantiate(
         wabt.parseWat(
-            src,
-            fs.readFileSync(src).toString()
+            filename,
+            fs.readFileSync(filename).toString()
         ).toBinary(
             { write_debug_names: true }
         ).buffer,

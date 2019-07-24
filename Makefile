@@ -10,7 +10,6 @@ shuffle.ml spill2.ml spill3.ml spill.ml sum.ml sum-tail.ml toomanyargs.ml
 
 TESTS   = $(addprefix $(TESTSDIR)/,$(SOURCES))
 WATS    = $(TESTS:.ml=.wat)
-WASMS   = $(TESTS:.ml=.wasm)
 RESULTS = $(TESTS:.ml=.result)
 ANSWERS = $(TESTS:.ml=.answer)
 DIFFS   = $(TESTS:.ml=.diff)
