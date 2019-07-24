@@ -24,11 +24,8 @@ test : clean mincaml $(DIFFS)
 %.diff : %.result %.answer
 	diff $?
 
-%.result : %.wasm
+%.result : %.wat
 	node runtime.js $< > $@
-
-%.wasm : %.wat
-	wat2wasm $< -o $@
 
 %.wat : %.ml
 	$(BUILDDIR)/main.exe $(<:.ml=)

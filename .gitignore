@@ -23,3 +23,8 @@ tests/*
 
 # merlin
 .merlin
+
+# js
+package-lock.json
+node_modules/
+npm-debug.*
