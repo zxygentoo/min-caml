@@ -1,11 +1,7 @@
-; (env
-;     (dev
-;         (flags (:standard -warn-error -A))))
-
 (executable
-    (name main)
-    (preprocess (pps ppx_deriving.std))
-    (modules :standard))
+  (name main)
+  (preprocess (pps ppx_deriving.std))
+  (modules :standard))
 
 (ocamllex lexer)
 (ocamlyacc parser)
