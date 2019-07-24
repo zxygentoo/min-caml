@@ -165,7 +165,7 @@ let rec g oc env fvs = function
        (set_global $HP (i32.add (i32.const %i) (get_global $HP)))\n\
        (; store func pointer ;)\n\
        (i32.store (get_local $%s) (i32.const %i))\n\
-       (; store free vars ;)\n"
+       (; fvs ;)\n"
       id size id info.idx ;
     let cur = ref 0 in
     List.iter2
@@ -184,7 +184,7 @@ let rec g oc env fvs = function
        (; register cls address to CL ;)\n\
        (set_global $CL %s)\n\
        (call_indirect (type %s)\n\
-       (; free vars ;)\n\
+       (; bvs ;)\n\
        %s\n\
        (; func pointer ;)\n\
        (i32.load (get_global $CL)))\n\
@@ -195,21 +195,16 @@ let rec g oc env fvs = function
       (smit_vars env fvs args)
 
   | AppCls(name, args) when M.mem name !funindex ->
-    (* for indirect recursive call *)
+    (* for indirect recursive self-calls,
+       no need to actually make the closre and backup/restore,
+       because 'someone' must have done it. *)
     let info = (M.find name !funindex) in
     emit oc 
-      "(; backup CL ;)\n\
-       (set_local $$cl_bak (get_global $CL))\n\
-       (; register fun_idx to CL ;)\n\
-       (set_global $CL (i32.const %i))\n\
-       (call_indirect (type %s)\n\
-       (; free vars ;)\n\
+      "(call_indirect (type %s)\n\
+       (; bvs ;)\n\
        %s\
        (; func pointer ;)\n\
-       (i32.const %i))\n\
-       (; restore CL ;)\n\
-       (set_global $CL (get_local $$cl_bak))\n"
-      info.idx
+       (i32.const %i))\n"
       info.ty_idx
       (smit_vars env fvs args)
       info.idx
@@ -488,8 +483,8 @@ let emit_fundefs oc fundefs =
 
 let emit_start oc start =
   emit_fundefs oc [
-    (* { name = (Id.Label "start", Type.Fun([], Type.Int)) *)
     { name = (Id.Label "start", Type.Fun([], Type.Unit))
+    (* { name = (Id.Label "start", Type.Fun([], Type.Int)) *)
     ; args = [] ; formal_fv = [] ; body = start }
   ] ;
   emit oc "(export \"start\" (func $start))"
