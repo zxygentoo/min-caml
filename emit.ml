@@ -112,8 +112,8 @@ let emit_make_array oc env fvs = function
   | AppDir(Id.Label "min_caml_make_array", [n; a]) ->
     emit oc
       "(set_global $GI (i32.const 0))\n\
-       (block\n
-        (loop\n\
+       (block\n\
+       (loop\n\
        (br_if 1 (i32.eq (get_global $GI) %s))\n\
        (i32.store\n(get_global $HP) %s)\n\
        (set_global $HP (i32.add (i32.const 4) (get_global $HP)))\n\
@@ -131,8 +131,8 @@ let emit_make_array oc env fvs = function
   | AppDir(Id.Label "min_caml_make_float_array", [n; a]) ->
     emit oc
       "(set_global $GI (i32.const 0))\n\
-       (block\n
-        (loop\n\
+       (block\n\
+       (loop\n\
        (br_if 1 (i32.eq (get_global $GI) %s))\n\
        (f64.store\n(get_global $HP) %s)\n\
        (set_global $HP (i32.add (i32.const 8) (get_global $HP)))\n\
