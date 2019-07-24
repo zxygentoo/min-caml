@@ -42,7 +42,7 @@ make
 ./mincaml tests/print        # filename without ".ml"
 ```
 
-- ```min-caml``` command line require filename without ```.ml```. I decided to keep it, but it still looks werid to me.
+- ```min-caml``` command line requires filename without ```.ml```. I decide not to change it.
 
 ### Run compiled module
 
@@ -64,5 +64,11 @@ make clean
 
 ## Differences with min-caml
 
-- Closure
-- KNormal
+- Compilation pipeline: WebAssembly is rather a "high-level" compilation target. There isn't much to do for virtual code preparation and register allocation, so after closure conversion (```closure.ml(i)```) we go direct to code emission (```emit.ml(i)```).
+- K-Normalization: WebAssembly ```if...then...else``` operation is typed, so changes had to be made to ```knormal.ml(i)``` to pass the result type of ```IfEq``` and ```IfLe```.
+
+
+## TODO
+
+- port min-rt
+- maybe a Virtual.ml after all to make things nicer
