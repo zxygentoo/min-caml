@@ -42,7 +42,7 @@ make
 ./mincaml tests/print        # filename without ".ml"
 ```
 
-*```min-caml``` command line requires filename without ```.ml```. I decided not to change it.*
+*The original **min-caml** compiler requires filename without ```.ml```. I decided not to change it.*
 
 ### Run compiled module
 
