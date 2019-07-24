@@ -107,37 +107,40 @@ let emit_var oc env fvs id =
 (* currently nodejs doesn't support WebAssembly.Global API,
    so these array making functions will be quite annoying to write as
    JavaScript externals, so we just do it within WebAssembly (for now). *)
-let emit_make_array oc env fvs e =
-  let template =
-        "(set_global $GI (i32.const 0))\n\
-       (block\n\
-       (loop\n\
+let emit_make_array oc env fvs = function
+  | AppDir(Id.Label "min_caml_make_array", [n; a]) ->
+    emit oc
+      "(set_global $GI (i32.const 0))\n\
+       (block\n
+        (loop\n\
        (br_if 1 (i32.eq (get_global $GI) %s))\n\
-       (i32.store (get_global $HP) %s)\n\
-       (set_global $HP (i32.add (i32.const %i) (get_global $HP)))\n\
+       (i32.store\n(get_global $HP) %s)\n\
+       (set_global $HP (i32.add (i32.const 4) (get_global $HP)))\n\
        (set_global $GI (i32.add (get_global $GI) (i32.const 1)))\n\
        (br 0)))\n\
-       (i32.sub (get_global $HP) (i32.shl %s (i32.const %i)))\n" in
-  match e with
-  | AppDir(Id.Label "min_caml_make_array", [n; a]) ->
-    emit oc template
+       (i32.sub (get_global $HP) (i32.shl %s (i32.const 2)))\n"
       (smit_var env fvs n)
       (if M.mem a !funindex then
-        (* immediate function array *)
-        smit "(i32.const %i)" (M.find a !funindex).idx
-      else
-        (smit_var env fvs a))
+         (* immediate function array *)
+         smit "(i32.const %i)" (M.find a !funindex).idx
+       else
+         smit_var env fvs a)
       (smit_var env fvs n)
-      4
-      2
 
   | AppDir(Id.Label "min_caml_make_float_array", [n; a]) ->
-    emit oc template
+    emit oc
+      "(set_global $GI (i32.const 0))\n\
+       (block\n
+        (loop\n\
+       (br_if 1 (i32.eq (get_global $GI) %s))\n\
+       (f64.store\n(get_global $HP) %s)\n\
+       (set_global $HP (i32.add (i32.const 8) (get_global $HP)))\n\
+       (set_global $GI (i32.add (get_global $GI) (i32.const 1)))\n\
+       (br 0)))\n\
+       (i32.sub (get_global $HP) (i32.shl %s (i32.const 3)))\n"
       (smit_var env fvs n)
       (smit_var env fvs a)
       (smit_var env fvs n)
-      8
-      3
 
   | _ ->
     raise (Invalid_argument "emit_make_array")
