@@ -36,10 +36,10 @@ npm install
 make
 ```
 
-### Compile source file
+### Compile file
 
 ```
-./mincaml tests/print        # filename without ".ml"
+./mincaml tests/print        # Note: filename without ".ml"
 ```
 
 *The original **min-caml** compiler requires filename without ```.ml```. I decided not to change it.*
