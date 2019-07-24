@@ -31,12 +31,21 @@ let smit = Printf.sprintf
 
 
 let rec local_vars = function
-  | Let(xt, e1, e2) -> xt :: local_vars e1 @ local_vars e2
-  | MakeCls(xt, _, e) -> xt :: local_vars e
+  | Let(xt, e1, e2) ->
+    xt :: local_vars e1 @ local_vars e2
+
+  | MakeCls(xt, _, e) ->
+    xt :: local_vars e
+
   | IfEq(_, _, e1, e2, _)
-  | IfLE(_, _, e1, e2, _) -> local_vars e1 @ local_vars e2
-  | LetTuple(xts, _, e) -> xts @ local_vars e
-  | _ -> []
+  | IfLE(_, _, e1, e2, _) ->
+    local_vars e1 @ local_vars e2
+
+  | LetTuple(xts, _, e) ->
+    xts @ local_vars e
+
+  | _ ->
+    []
 
 
 let ofst_of_ty = function
@@ -45,23 +54,35 @@ let ofst_of_ty = function
   | _ -> 4
 
 
-(* convert Type.t to wasm type i32/i64/f32/f64 in string *)
+(* convert Type.t to wasm type in string *)
 let rec wt_of_ty env = function
-  | Type.Unit -> ""
-  | Type.Float -> "f64"
+  | Type.Unit ->
+    ""
+
+  | Type.Float ->
+    "f64"
+
   | Type.Int
   | Type.Bool
   | Type.Fun _
   | Type.Tuple _
-  | Type.Array _ -> "i32"
-  | Type.Var { contents = None } -> failwith "wt_of_ty Var(ref(None))"
-  | Type.Var { contents = Some t } -> wt_of_ty env t
+  | Type.Array _ ->
+    "i32"
+
+  | Type.Var { contents = None } ->
+    failwith "wt_of_ty Var(ref(None))"
+
+  | Type.Var { contents = Some t } ->
+    wt_of_ty env t
 
 
 let smit_var env fvs id =
   let rec smit_var' ofst = function
     | [] ->
-      if M.find id env <> Type.Unit then smit "(get_local $%s)\n" id else ""
+      if M.find id env <> Type.Unit then
+        smit "(get_local $%s)\n" id
+      else
+        ""
 
     | (x, t) :: _ when x = id ->
       if t <> Type.Unit then
@@ -88,7 +109,7 @@ let emit_var oc env fvs id =
    JavaScript externals, so we just do it within WebAssembly (for now). *)
 let emit_make_array oc env fvs = function
   | AppDir(Id.Label "min_caml_make_array", [n; a]) when M.mem a !funindex ->
-    (* function array *)
+    (* immediate function array *)
     emit oc
       "(set_global $GI (i32.const 0))\n\
        (block\n\
@@ -273,8 +294,8 @@ let rec g oc env fvs = function
     ()
 
   | AppDir(Id.Label "min_caml_make_array", _)
-  | AppDir(Id.Label "min_caml_make_float_array", _) as mkarr ->
-    emit_make_array oc env fvs mkarr
+  | AppDir(Id.Label "min_caml_make_float_array", _) as e ->
+    emit_make_array oc env fvs e
 
   | AppDir(Id.Label name, args) ->
     emit oc "(call $%s %s)\n" name (smit_vars env fvs args)
@@ -351,8 +372,8 @@ let rec g oc env fvs = function
         failwith "Put: first argument is not Array."
     end
 
-  | ExtArray _ ->
-    emit oc "(; -- TODO: ExtArray -- ;)"
+  | ExtArray Id.Label x ->
+    emit oc "(get_global $min_caml_%s)" x
 
 
 (* function index building *)
@@ -391,7 +412,7 @@ let emit_local oc = function
 
 let emit_locals oc e =
   List.iter (emit_local oc) (local_vars e) ;
-  (* additional CL backup and counter
+  (* additional CL backup,
      we can eliminate this when `e` doesn't contain MakeCLS,
      but the additional check just seems not worth it,
      and in a real production system, 
@@ -433,7 +454,7 @@ let emit_imports oc =
 
 
 let emit_memory oc =
-  emit oc "(memory (export \"memory\") 1)\n"
+  emit oc "(memory (export \"memory\") 1)\n\n"
 
 
 let emit_globals oc =
@@ -441,14 +462,13 @@ let emit_globals oc =
   emit oc "(global $HP (mut i32) (i32.const 0))\n" ;
   (* closure pointer *)
   emit oc "(global $CL (mut i32) (i32.const 0))\n" ;
-  (* generic 32-bit register, mainly use for looping *)
-  emit oc "(global $GI (mut i32) (i32.const 0))\n"
+  (* generic 32-bit register, currently only used for looping *)
+  emit oc "(global $GI (mut i32) (i32.const 0))\n\n"
 
 
 let emit_table oc fds =
   emit oc
-    "(table %d anyfunc)\n\
-     (elem (i32.const 0) %s)\n"
+    "(table %d anyfunc)\n(elem (i32.const 0) %s)\n\n"
     (List.length fds)
     (Id.pp_list (List.map (fun { name = Id.Label n, _ ; _ } -> "$" ^ n) fds))
 
@@ -460,7 +480,7 @@ let emit_types oc sigs =
         emit oc "(type %s (func" idx ;
         List.iter (emit_param oc) args ;
         emit_result oc ret_t ;
-        emit oc "))\n"
+        emit oc "))\n\n"
 
       | _ ->
         raise (Invalid_argument "emit_funtype"))
@@ -477,7 +497,7 @@ let emit_fundefs oc fundefs =
         emit oc "\n" ;
         emit_locals oc body ;
         g oc (M.add_list (args @ formal_fv) M.empty) formal_fv body ;
-        emit oc ")\n"
+        emit oc ")\n\n"
 
       | _ ->
         raise (Invalid_argument "emit_fundef"))
