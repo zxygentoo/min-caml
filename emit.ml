@@ -123,7 +123,7 @@ let rec g oc env fvs = function
 
   | IfEq(x, y, e1, e2, t) ->
     emit oc "(if (result %s) (%s.eq %s %s)\n"
-      (wt_of_ty env)
+      (wt_of_ty env t)
       (wt_of_ty env (M.find x env))
       (smit_var env fvs x)
       (smit_var env fvs y) ;
@@ -444,7 +444,7 @@ let emit_table oc fds =
   emit oc
     "(table %d anyfunc)\n\
      (elem (i32.const 0) %s)\n"
-    (List.length fundefs)
+    (List.length fds)
     (Id.pp_list (List.map (fun { name = Id.Label n, _ ; _ } -> "$" ^ n) fds))
 
 
@@ -480,9 +480,10 @@ let emit_fundefs oc fundefs =
 
 
 let emit_start oc start =
-  emit_fundefs oc
+  emit_fundefs oc [
     { name = (Id.Label "start", Type.Fun([], Type.Unit))
-    ; args = [] ; formal_fv = [] ; body = start } ;
+    ; args = [] ; formal_fv = [] ; body = start }
+  ] ;
   emit oc "(export \"start\" (func $start))"
 
 

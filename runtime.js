@@ -18,7 +18,7 @@ const core = {
 };
 
 
-const run = srs => {
+const run = src => {
     return WebAssembly.instantiate(
         new Uint8Array(fs.readFileSync(src)),
         core
