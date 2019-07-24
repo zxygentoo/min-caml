@@ -150,8 +150,8 @@ let rec g oc env fvs = function
     emit oc "(set_local $%s " id ; g oc env fvs e1 ; emit oc ")\n" ;
     g oc (M.add id t env) fvs e2
 
-  | Var v ->
-    emit_var oc env fvs v
+  | Var id ->
+    emit_var oc env fvs id
 
   | MakeCls((id, t), { entry = Id.Label(n) ; actual_fv }, e) ->
     let info = M.find n !funindex in
@@ -222,17 +222,17 @@ let rec g oc env fvs = function
 
   | AppDir(Id.Label "min_caml_make_array", [n; a]) when M.mem a !funindex ->
     (* function array *)
-    emit oc "(set_local $$counter (i32.const 0))\n" ;
+    emit oc "(set_global $GI (i32.const 0))\n" ;
     emit oc "(block\n(loop\n" ;
-    emit oc "(br_if 1 (i32.eq (get_local $$counter)\n" ;
+    emit oc "(br_if 1 (i32.eq (get_global $GI)\n" ;
     emit_var oc env fvs n ;
     emit oc "))\n" ;
     emit oc "(i32.store\n(get_global $HP)\n" ;
     emit oc "(i32.const %i)\n" (M.find a !funindex).idx ;
     emit oc ")\n" ;
     emit oc "(set_global $HP (i32.add (i32.const 4) (get_global $HP)))\n" ;
-    emit oc "(set_local $$counter\n" ;
-    emit oc "(i32.add (get_local $$counter) (i32.const 1)))\n" ;
+    emit oc "(set_global $GI\n" ;
+    emit oc "(i32.add (get_global $GI) (i32.const 1)))\n" ;
     emit oc "(br 0)\n" ;
     emit oc "))\n" ;
     emit oc "(i32.sub (get_global $HP) (i32.mul (i32.const 4)\n" ;
@@ -240,17 +240,17 @@ let rec g oc env fvs = function
     emit oc "))\n" ;
 
   | AppDir(Id.Label "min_caml_make_array", [n; a]) ->
-    emit oc "(set_local $$counter (i32.const 0))\n" ;
+    emit oc "(set_global $GI (i32.const 0))\n" ;
     emit oc "(block\n(loop\n" ;
-    emit oc "(br_if 1 (i32.eq (get_local $$counter)\n" ;
+    emit oc "(br_if 1 (i32.eq (get_global $GI)\n" ;
     emit_var oc env fvs n ;
     emit oc "))\n" ;
     emit oc "(i32.store\n(get_global $HP)\n" ;
     emit_var oc env fvs a ;
     emit oc ")\n" ;
     emit oc "(set_global $HP (i32.add (i32.const 4) (get_global $HP)))\n" ;
-    emit oc "(set_local $$counter\n" ;
-    emit oc "(i32.add (get_local $$counter) (i32.const 1)))\n" ;
+    emit oc "(set_global $GI\n" ;
+    emit oc "(i32.add (get_global $GI) (i32.const 1)))\n" ;
     emit oc "(br 0)\n" ;
     emit oc "))\n" ;
     emit oc "(i32.sub (get_global $HP) (i32.mul (i32.const 4)\n" ;
@@ -258,17 +258,17 @@ let rec g oc env fvs = function
     emit oc "))\n" ;
 
   | AppDir(Id.Label "min_caml_make_float_array", [n; a]) ->
-    emit oc "(set_local $$counter (i32.const 0))\n" ;
+    emit oc "(set_global $GI (i32.const 0))\n" ;
     emit oc "(block\n(loop\n" ;
-    emit oc "(br_if 1 (i32.eq (get_local $$counter)\n" ;
+    emit oc "(br_if 1 (i32.eq (get_global $GI)\n" ;
     emit_var oc env fvs n ;
     emit oc "))\n" ;
     emit oc "(f64.store\n(get_global $HP)\n" ;
     emit_var oc env fvs a ;
     emit oc ")\n" ;
     emit oc "(set_global $HP (i32.add (i32.const 8) (get_global $HP)))\n" ;
-    emit oc "(set_local $$counter\n" ;
-    emit oc "(i32.add (get_local $$counter) (i32.const 1)))\n" ;
+    emit oc "(set_global $GI\n" ;
+    emit oc "(i32.add (get_global $GI) (i32.const 1)))\n" ;
     emit oc "(br 0)\n" ;
     emit oc "))\n" ;
     emit oc "(i32.sub (get_global $HP) " ;
@@ -387,11 +387,11 @@ let emit_local oc = function
 let emit_locals oc e =
   List.iter (emit_local oc) (local_vars e) ;
   (* additional CL backup and counter
-     we can eliminate these when unnecessary, but the additional check
-     just seems not worth it, and in a real production system,
+     we can eliminate this when `e` doesn't contain MakeCLS,
+     but the additional check just seems not worth it,
+     and in a real production system, 
      you will most certainly have a backend optimization for that anyway. *)
-  emit oc "(local $$cl_bak i32)\n" ;
-  emit oc "(local $$counter i32)\n"
+  emit oc "(local $$cl_bak i32)\n"
 
 
 let emit_label_param oc = function
