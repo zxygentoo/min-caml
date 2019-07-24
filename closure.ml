@@ -4,7 +4,7 @@ type closure =
   { entry : Id.label
   ; actual_fv : Id.t list
   }
-[@@deriving show]
+(* [@@deriving show] *)
 
 type t =
   | Unit
@@ -30,7 +30,7 @@ type t =
   | Get of Id.t * Id.t
   | Put of Id.t * Id.t * Id.t
   | ExtArray of Id.label
-[@@deriving show]
+(* [@@deriving show] *)
 
 type fundef =
   { name : Id.label * Type.t
@@ -38,10 +38,10 @@ type fundef =
   ; formal_fv : (Id.t * Type.t) list
   ; body : t
   }
-[@@deriving show]
+(* [@@deriving show] *)
 
 type prog = Prog of fundef list * t
-[@@deriving show]
+(* [@@deriving show] *)
 
 
 let toplevel : fundef list ref = ref []
@@ -240,5 +240,5 @@ let flattern e =
   toplevel := [];
   let e' = g M.empty S.empty e in
   let prog = Prog(List.rev !toplevel, e') in
-  Printf.eprintf "==> Clourse Prog: \n%s\n" (show_prog prog) ;
+  (* Printf.eprintf "==> Clourse Prog: \n%s\n" (show_prog prog) ; *)
   prog

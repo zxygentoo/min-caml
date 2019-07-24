@@ -13,11 +13,10 @@ A [min-caml](https://github.com/esumii/min-caml) port targeting [WebAssembly](ht
 
 ```
 opam switch 4.07.0
-opam install dune ppx_jane ppx_deriving
+opam install dune
 ```
 
 - [dune](https://dune.build/): for building the compiler.
-- ppx_jane/ppx_deriving: preprocessors for debugging.
 
 ### JavaScript dependencies
 

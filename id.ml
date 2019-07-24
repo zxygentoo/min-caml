@@ -1,7 +1,12 @@
-type t = string [@@deriving show]
-type label = Label of string [@@deriving show]
+type t = string
+[@@deriving show]
+
+type label = Label of string
+[@@deriving show]
+
 
 let compare = Pervasives.compare
+
 
 let rec pp_list = function
   | [] ->
@@ -13,11 +18,14 @@ let rec pp_list = function
   | x :: xs ->
     x ^ " " ^ pp_list xs
 
+
 let counter = ref 0
+
 
 let genid s =
   incr counter;
   Printf.sprintf "%s.%d" s !counter
+
 
 let id_of_typ = function
   | Type.Unit -> "u"
@@ -28,6 +36,7 @@ let id_of_typ = function
   | Type.Tuple _ -> "t"
   | Type.Array _ -> "a" 
   | Type.Var _ -> assert false
+
 
 let gentmp typ =
   incr counter;
