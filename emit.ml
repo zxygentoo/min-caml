@@ -239,22 +239,7 @@ let rec g oc env fvs = function
       actual_fv ;
     g oc (M.add id t env) fvs e
 
-  | AppCls(name, args) when M.mem name !funindex ->
-    (* for indirect recursive self-calls,
-       no need to actually make the closre (and backup/restore $CL),
-       because 'someone' must have done it. *)
-    let info = (M.find name !funindex) in
-    emit oc 
-      "(call_indirect (type %s)\n\
-       (; bvs ;)\n\
-       %s\
-       (; func pointer ;)\n\
-       (i32.const %i))\n"
-      info.ty_idx
-      (smit_vars env fvs args)
-      info.idx
-
-  | AppCls(name, args) ->
+  | AppCls(name, args) when M.mem name env ->
     emit oc
       "(; backup CL ;)\n\
        (set_local $$cl_bak (get_global $CL))\n\
@@ -270,6 +255,21 @@ let rec g oc env fvs = function
       (smit_var env fvs name)
       (TM.find (M.find name env) !funtyindex).ty_idx
       (smit_vars env fvs args)
+
+  | AppCls(name, args) ->
+    (* for indirect recursive self-calls,
+       no need to actually make the closre (and backup/restore $CL),
+       because 'someone' must have done it. *)
+    let info = (M.find name !funindex) in
+    emit oc 
+      "(call_indirect (type %s)\n\
+       (; bvs ;)\n\
+       %s\
+       (; func pointer ;)\n\
+       (i32.const %i))\n"
+      info.ty_idx
+      (smit_vars env fvs args)
+      info.idx
 
   | AppDir(Id.Label "min_caml_make_array", [_; a])
     when M.mem a env && M.find a env = Type.Unit ->
