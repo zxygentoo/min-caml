@@ -83,7 +83,7 @@ let smit_vars env fvs args =
 let emit_var oc env fvs id =
   emit oc "%s" (smit_var env fvs id)
 
-(* current nodejs doesn't support WebAssembly.Global
+(* currently nodejs doesn't support WebAssembly.Global API,
    so these array making functions will be quite annoying to write as
    JavaScript externals, so we just do it within WebAssembly (for now). *)
 let emit_make_array oc env fvs = function
@@ -192,7 +192,6 @@ let rec g oc env fvs = function
 
   | IfLE(x, y, e1, e2, t) ->
     emit oc "(if (result %s) (%s.le_s %s %s)\n"
-      (* emit oc "(if (result %s) (%s.le_u %s %s)\n" *)
       (wt_of_ty env t)
       (wt_of_ty env (M.find x env))
       (smit_var env fvs x)
@@ -253,7 +252,7 @@ let rec g oc env fvs = function
 
   | AppCls(name, args) when M.mem name !funindex ->
     (* for indirect recursive self-calls,
-       no need to actually make the closre and backup/restore,
+       no need to actually make the closre (and backup/restore $CL),
        because 'someone' must have done it. *)
     let info = (M.find name !funindex) in
     emit oc 
@@ -488,7 +487,6 @@ let emit_fundefs oc fundefs =
 let emit_start oc start =
   emit_fundefs oc [
     { name = (Id.Label "start", Type.Fun([], Type.Unit))
-    (* { name = (Id.Label "start", Type.Fun([], Type.Int)) *)
     ; args = [] ; formal_fv = [] ; body = start }
   ] ;
   emit oc "(export \"start\" (func $start))"
