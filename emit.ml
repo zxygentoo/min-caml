@@ -104,6 +104,7 @@ let smit_vars env fvs args =
 let emit_var oc env fvs id =
   emit oc "%s" (smit_var env fvs id)
 
+
 (* currently nodejs doesn't support WebAssembly.Global API,
    so these array making functions will be quite annoying to write as
    JavaScript externals, so we just do it within WebAssembly (for now). *)
