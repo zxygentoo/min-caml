@@ -65,7 +65,7 @@ make clean
 ## Changes to min-caml
 
 - Compilation pipeline: WebAssembly is rather a "high-level" (compare to assembly) compilation target. There isn't much to do for virtual code preparation and register allocation, so after closure conversion (```closure.ml(i)```) we go direct to code emission (```emit.ml(i)```).
-- K-Normalization: WebAssembly ```if...then...else``` operation is typed, so changes had to be made to ```knormal.ml(i)``` to pass the result type of ```IfEq``` and ```IfLe```.
+- K-Normalization: WebAssembly ```if...then...else``` operation is typed, so changes had to be made to ```knormal.ml(i)``` to pass the result type of ```IfEq``` and ```IfLE```.
 
 
 ## TODO
