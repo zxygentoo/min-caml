@@ -26,7 +26,7 @@ cd min-ocaml-wasm
 npm install
 ```
 
-- [wabt](https://www.npmjs.com/package/wabt): for loading min-caml-wasm emitted .wat file as WebAssembly module.
+- [wabt](https://www.npmjs.com/package/wabt): for parsing emitted ```.wat``` file to WebAssembly module.
 
 ## Usage
 
@@ -42,7 +42,7 @@ make
 ./mincaml tests/print        # filename without ".ml"
 ```
 
-- ```min-caml``` command line requires filename without ```.ml```. I decide not to change it.
+*```min-caml``` command line requires filename without ```.ml```. I decided not to change it.*
 
 ### Run compiled module
 
