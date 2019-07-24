@@ -9,7 +9,7 @@ A [min-caml](https://github.com/esumii/min-caml) port targeting [WebAssembly](ht
 
 ### OCaml dependencies
 
-Install using (opam)[http://opam.ocaml.org]:
+- using [opam](http://opam.ocaml.org):
 
 ```
 opam switch 4.07.0
