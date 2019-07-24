@@ -1,6 +1,6 @@
 (executable
   (name main)
-  (preprocess (pps ppx_deriving.std))
+  ; (preprocess (pps ppx_deriving.std))
   (modules :standard))
 
 (ocamllex lexer)
