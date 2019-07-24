@@ -1,1 +1,1 @@
-val f : out_channel -> Asm.prog -> unit
+val emitcode : out_channel -> Closure.prog -> unit

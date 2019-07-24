@@ -1,8 +1,3 @@
-type closure =
-  { entry : Id.label
-  ; actual_fv : Id.t list
-  }
-
 type t =
   | Unit
   | Int of int
@@ -19,27 +14,28 @@ type t =
   | IfLE of Id.t * Id.t * t * t * Type.t
   | Let of (Id.t * Type.t) * t * t
   | Var of Id.t
-  | MakeCls of (Id.t * Type.t) * closure * t
-  | AppCls of Id.t * Id.t list
-  | AppDir of Id.label * Id.t list
+  | LetRec of fundef * t
+  | App of Id.t * Id.t list
   | Tuple of Id.t list
   | LetTuple of (Id.t * Type.t) list * Id.t * t
   | Get of Id.t * Id.t
   | Put of Id.t * Id.t * Id.t
-  | ExtArray of Id.label
+  (* externals *)
+  | ExtArray of Id.t
+  | ExtFunApp of Id.t * Id.t list
 
-type fundef =
-  { name : Id.label * Type.t
+and fundef =
+  { name : Id.t * Type.t
   ; args : (Id.t * Type.t) list
-  ; formal_fv : (Id.t * Type.t) list
   ; body : t
   }
 
-type prog = Prog of fundef list * t
 
+
+val convert_let : t * Type.t -> (Id.t -> t * Type.t) -> t * Type.t
 
 val free_vars : t -> S.t
 
-val g : Type.t M.t -> S.t -> Knormal.t -> t
+val g : Type.t M.t -> Syntax.t -> t * Type.t
 
-val flattern : Knormal.t -> prog
+val normalize : Syntax.t -> t

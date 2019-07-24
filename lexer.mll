@@ -1,100 +1,143 @@
 {
-(* lexerが利用する変数、関数、型などの定義 *)
-open Parser
-open Type
+  open Parser
 }
 
-(* 正規表現の略記 *)
+
 let space = [' ' '\t' '\n' '\r']
 let digit = ['0'-'9']
 let lower = ['a'-'z']
 let upper = ['A'-'Z']
 
+
 rule token = parse
 | space+
-    { token lexbuf }
+  { token lexbuf }
+
 | "(*"
-    { comment lexbuf; (* ネストしたコメントのためのトリック *)
-      token lexbuf }
+  { comment lexbuf
+  ; token lexbuf }
+
 | '('
-    { LPAREN }
+  { LPAREN }
+
 | ')'
-    { RPAREN }
+  { RPAREN }
+
 | "true"
-    { BOOL(true) }
+  { BOOL(true) }
+
 | "false"
-    { BOOL(false) }
+  { BOOL(false) }
+
 | "not"
-    { NOT }
-| digit+ (* 整数を字句解析するルール (caml2html: lexer_int) *)
-    { INT(int_of_string (Lexing.lexeme lexbuf)) }
+  { NOT }
+
+| digit+
+  { INT(int_of_string (Lexing.lexeme lexbuf)) }
+
 | digit+ ('.' digit*)? (['e' 'E'] ['+' '-']? digit+)?
-    { FLOAT(float_of_string (Lexing.lexeme lexbuf)) }
-| '-' (* -.より後回しにしなくても良い? 最長一致? *)
-    { MINUS }
-| '+' (* +.より後回しにしなくても良い? 最長一致? *)
-    { PLUS }
+  { FLOAT(float_of_string (Lexing.lexeme lexbuf)) }
+
+| '-'
+  { MINUS }
+
+| '+'
+  { PLUS }
+
 | "-."
-    { MINUS_DOT }
+  { MINUS_DOT }
+
 | "+."
-    { PLUS_DOT }
+  { PLUS_DOT }
+
 | "*."
-    { AST_DOT }
+  { AST_DOT }
+
 | "/."
-    { SLASH_DOT }
+  { SLASH_DOT }
+
 | '='
-    { EQUAL }
+  { EQUAL }
+
 | "<>"
-    { LESS_GREATER }
+  { LESS_GREATER }
+
 | "<="
-    { LESS_EQUAL }
+  { LESS_EQUAL }
+
 | ">="
-    { GREATER_EQUAL }
+  { GREATER_EQUAL }
+
 | '<'
-    { LESS }
+  { LESS }
+
 | '>'
-    { GREATER }
+  { GREATER }
+
 | "if"
-    { IF }
+  { IF }
+
 | "then"
-    { THEN }
+  { THEN }
+
 | "else"
-    { ELSE }
+  { ELSE }
+
 | "let"
-    { LET }
+  { LET }
+
 | "in"
-    { IN }
+  { IN }
+
 | "rec"
-    { REC }
+  { REC }
+
 | ','
-    { COMMA }
+  { COMMA }
+
 | '_'
-    { IDENT(Id.gentmp Type.Unit) }
-| "Array.create" | "Array.make" (* [XX] ad hoc *)
-    { ARRAY_CREATE }
+  { IDENT(Id.gentmp Type.Unit) }
+
+| "Array.create" 
+| "Array.make"
+  { ARRAY_CREATE }
+
 | '.'
-    { DOT }
+  { DOT }
+
 | "<-"
-    { LESS_MINUS }
+  { LESS_MINUS }
+
 | ';'
-    { SEMICOLON }
+  { SEMICOLON }
+
 | eof
-    { EOF }
-| lower (digit|lower|upper|'_')* (* 他の「予約語」より後でないといけない *)
-    { IDENT(Lexing.lexeme lexbuf) }
+  { EOF }
+
+| lower (digit |lower |upper |'_')*
+  { IDENT(Lexing.lexeme lexbuf) }
+
 | _
-    { failwith
-        (Printf.sprintf "unknown token %s near characters %d-%d"
-           (Lexing.lexeme lexbuf)
-           (Lexing.lexeme_start lexbuf)
-           (Lexing.lexeme_end lexbuf)) }
+  {
+    failwith
+      (
+        Printf.sprintf "unknown token %s near characters %d-%d"
+          (Lexing.lexeme lexbuf)
+          (Lexing.lexeme_start lexbuf)
+          (Lexing.lexeme_end lexbuf)
+      )
+  }
+
 and comment = parse
 | "*)"
-    { () }
+  { () }
+
 | "(*"
-    { comment lexbuf;
-      comment lexbuf }
+  { comment lexbuf
+  ; comment lexbuf }
+
 | eof
-    { Format.eprintf "warning: unterminated comment@." }
+  { Format.eprintf "warning: unterminated comment@." }
+
 | _
-    { comment lexbuf }
+  { comment lexbuf }

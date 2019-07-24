@@ -1,0 +1,30 @@
+*.s
+*.annot
+*.cmo
+*.cma
+*.cmi
+*.a
+*.o
+*.cmx
+*.cmxs
+*.cmxa
+
+# generated lexer and parser
+lexer.ml
+parser.ml
+parser.mli
+
+# dune build directory
+_build
+
+# tests generated files
+tests/*
+!tests/*.ml
+
+# merlin
+.merlin
+
+# js
+package-lock.json
+node_modules/
+npm-debug.*

@@ -1,0 +1,25 @@
+{
+  "name": "min-caml-wasm",
+  "version": "1.0.0",
+  "description": "A [min-caml](https://github.com/esumii/min-caml) port targeting [WebAssembly](https://webassembly.org).",
+  "main": "runtime.js",
+  "directories": {
+    "test": "tests"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zxygentoo/min-caml.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/zxygentoo/min-caml/issues"
+  },
+  "homepage": "https://github.com/zxygentoo/min-caml#readme",
+  "devDependencies": {
+    "wabt": "^1.0.11"
+  }
+}
