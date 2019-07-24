@@ -16,6 +16,7 @@ parser.mli
 
 # dune build directory
 _build
+mincaml
 
 # tests generated files
 tests/*
@@ -25,6 +26,5 @@ tests/*
 .merlin
 
 # js
-package-lock.json
 node_modules/
 npm-debug.*
