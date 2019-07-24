@@ -135,6 +135,7 @@ let rec g oc env fvs = function
 
   | IfLE(x, y, e1, e2, t) ->
     emit oc "(if (result %s) (%s.le_s %s %s)\n"
+      (* emit oc "(if (result %s) (%s.le_u %s %s)\n" *)
       (wt_of_ty env t)
       (wt_of_ty env (M.find x env))
       (smit_var env fvs x)
@@ -235,9 +236,8 @@ let rec g oc env fvs = function
     emit oc "(i32.add (get_global $GI) (i32.const 1)))\n" ;
     emit oc "(br 0)\n" ;
     emit oc "))\n" ;
-    emit oc "(i32.sub (get_global $HP) (i32.mul (i32.const 4)\n" ;
-    emit_var oc env fvs n ;
-    emit oc "))\n" ;
+    emit oc "(i32.sub (get_global $HP) (i32.shl %s (i32.const 2)))"
+      (smit_var env fvs n) ;
 
   | AppDir(Id.Label "min_caml_make_array", [n; a]) ->
     emit oc "(set_global $GI (i32.const 0))\n" ;
@@ -253,9 +253,8 @@ let rec g oc env fvs = function
     emit oc "(i32.add (get_global $GI) (i32.const 1)))\n" ;
     emit oc "(br 0)\n" ;
     emit oc "))\n" ;
-    emit oc "(i32.sub (get_global $HP) (i32.mul (i32.const 4)\n" ;
-    emit_var oc env fvs n ;
-    emit oc "))\n" ;
+    emit oc "(i32.sub (get_global $HP) (i32.shl %s (i32.const 2)))"
+      (smit_var env fvs n) ;
 
   | AppDir(Id.Label "min_caml_make_float_array", [n; a]) ->
     emit oc "(set_global $GI (i32.const 0))\n" ;
@@ -271,10 +270,9 @@ let rec g oc env fvs = function
     emit oc "(i32.add (get_global $GI) (i32.const 1)))\n" ;
     emit oc "(br 0)\n" ;
     emit oc "))\n" ;
-    emit oc "(i32.sub (get_global $HP) " ;
-    emit oc "(i32.mul (i32.const 8) " ;
-    emit_var oc env fvs n ;
-    emit oc "))\n" ;
+    emit oc "(i32.sub (get_global $HP) (i32.shl %s (i32.const 3)))\n"
+      (smit_var env fvs n) ;
+
 
   | AppDir(Id.Label "min_caml_make_array", _)
   | AppDir(Id.Label "min_caml_make_float_array", _) ->
@@ -316,11 +314,15 @@ let rec g oc env fvs = function
       | Type.Array Type.Unit ->
         ()
 
-      | Type.Array t ->
+      | Type.Array Type.Float ->
         emit oc
-          "(%s.load (i32.add (i32.mul (i32.const %i) %s) %s))\n"
-          (wt_of_ty env t)
-          (ofst_of_ty t)
+          "(f64.load (i32.add (i32.shl %s (i32.const 3)) %s))\n"
+          (smit_var env fvs y)
+          (smit_var env fvs x)
+
+      | Type.Array _ ->
+        emit oc
+          "(i32.load (i32.add (i32.shl %s (i32.const 2)) %s))\n"
           (smit_var env fvs y)
           (smit_var env fvs x)
 
@@ -333,11 +335,16 @@ let rec g oc env fvs = function
       | Type.Array Type.Unit ->
         ()
 
-      | Type.Array t ->
+      | Type.Array Type.Float ->
         emit oc
-          "(%s.store (i32.add (i32.mul (i32.const %i) %s) %s) %s)\n"
-          (wt_of_ty env t)
-          (ofst_of_ty t)
+          "(f64.store (i32.add (i32.shl %s (i32.const 3)) %s) %s)\n"
+          (smit_var env fvs y)
+          (smit_var env fvs x)
+          (smit_var env fvs z)
+
+      | Type.Array _ ->
+        emit oc
+          "(i32.store (i32.add (i32.shl %s (i32.const 2)) %s) %s)\n"
           (smit_var env fvs y)
           (smit_var env fvs x)
           (smit_var env fvs z)
@@ -481,6 +488,7 @@ let emit_fundefs oc fundefs =
 
 let emit_start oc start =
   emit_fundefs oc [
+    (* { name = (Id.Label "start", Type.Fun([], Type.Int)) *)
     { name = (Id.Label "start", Type.Fun([], Type.Unit))
     ; args = [] ; formal_fv = [] ; body = start }
   ] ;

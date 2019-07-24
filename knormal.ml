@@ -261,8 +261,8 @@ let rec g env = function
          convert_let g_e2
            (fun y ->
               let l = match t2 with
-                      | Type.Float -> "make_float_array"
-                      | _ -> "make_array"
+                | Type.Float -> "make_float_array"
+                | _ -> "make_array"
               in
               ExtFunApp(l, [x; y]), Type.Array(t2)))
 
