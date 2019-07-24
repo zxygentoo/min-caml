@@ -16,6 +16,9 @@ ANSWERS = $(TESTS:.ml=.answer)
 DIFFS   = $(TESTS:.ml=.diff)
 
 
+all : mincaml
+	cp $(BUILDDIR)/main.exe mincaml
+
 mincaml :
 	dune build main.exe
 
