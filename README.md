@@ -5,7 +5,7 @@ A [min-caml](https://github.com/esumii/min-caml) port targeting [WebAssembly](ht
 ## Dependencies
 
 - [OCaml](http://ocaml.org/) compiler *(tested on 4.07.0)*
-- recent release of [Node.js](https://nodejs.org/) with WebAssembly support *(tested on v8.12.0)*
+- recent release of [Node.js](https://nodejs.org/) with WebAssembly support *(tested on v8.12.0 and v11.6.0)*
 
 ### OCaml dependencies
 
