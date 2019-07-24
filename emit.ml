@@ -104,6 +104,7 @@ let smit_vars env fvs args =
 let emit_var oc env fvs id =
   emit oc "%s" (smit_var env fvs id)
 
+
 (* currently nodejs doesn't support WebAssembly.Global API,
    so these array making functions will be quite annoying to write as
    JavaScript externals, so we just do it within WebAssembly (for now). *)
@@ -111,8 +112,8 @@ let emit_make_array oc env fvs = function
   | AppDir(Id.Label "min_caml_make_array", [n; a]) ->
     emit oc
       "(set_global $GI (i32.const 0))\n\
-       (block\n
-        (loop\n\
+       (block\n\
+       (loop\n\
        (br_if 1 (i32.eq (get_global $GI) %s))\n\
        (i32.store\n(get_global $HP) %s)\n\
        (set_global $HP (i32.add (i32.const 4) (get_global $HP)))\n\
@@ -130,8 +131,8 @@ let emit_make_array oc env fvs = function
   | AppDir(Id.Label "min_caml_make_float_array", [n; a]) ->
     emit oc
       "(set_global $GI (i32.const 0))\n\
-       (block\n
-        (loop\n\
+       (block\n\
+       (loop\n\
        (br_if 1 (i32.eq (get_global $GI) %s))\n\
        (f64.store\n(get_global $HP) %s)\n\
        (set_global $HP (i32.add (i32.const 8) (get_global $HP)))\n\
@@ -255,7 +256,7 @@ let rec g oc env fvs = function
       (TM.find (M.find name env) !funtyindex).ty_idx
       (smit_vars env fvs args)
 
-  | AppCls(name, args) when M.mem name !funindex ->
+  | AppCls(name, args) ->
     (* for indirect recursive self-calls,
        no need to actually make the closre (and backup/restore $CL),
        because 'someone' must have done it. *)
@@ -269,9 +270,6 @@ let rec g oc env fvs = function
       info.ty_idx
       (smit_vars env fvs args)
       info.idx
-
-  | AppCls(name, _)  ->
-    failwith ("'AppCls: " ^ name ^ "' is neither local or function.")
 
   | AppDir(Id.Label "min_caml_make_array", [_; a])
     when M.mem a env && M.find a env = Type.Unit ->
