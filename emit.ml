@@ -83,6 +83,63 @@ let smit_vars env fvs args =
 let emit_var oc env fvs id =
   emit oc "%s" (smit_var env fvs id)
 
+(* current nodejs doesn't support WebAssembly.Global
+   so these array making functions will be quite annoying to write as
+   JavaScript externals, so we just do it within WebAssembly (for now). *)
+let emit_make_array oc env fvs = function
+  | AppDir(Id.Label "min_caml_make_array", [n; a]) when M.mem a !funindex ->
+    (* function array *)
+    emit oc
+      "(set_global $GI (i32.const 0))\n\
+       (block\n\
+       (loop\n\
+       (br_if 1 (i32.eq (get_global $GI) %s))\n\
+       (i32.store (get_global $HP) (i32.const %i))\n\
+       (set_global $HP (i32.add (i32.const 4) (get_global $HP)))\n\
+       (set_global $GI (i32.add (get_global $GI) (i32.const 1)))\n\
+       (br 0)))\n\
+       (i32.sub (get_global $HP) (i32.shl %s (i32.const 2)))\n"
+      (smit_var env fvs n)
+      (M.find a !funindex).idx
+      (smit_var env fvs n)
+
+  | AppDir(Id.Label "min_caml_make_array", [n; a]) ->
+    emit oc
+      "(set_global $GI (i32.const 0))\n\
+       (block\n
+        (loop\n\
+       (br_if 1 (i32.eq (get_global $GI) %s))\n\
+       (i32.store\n(get_global $HP) %s)\n\
+       (set_global $HP (i32.add (i32.const 4) (get_global $HP)))\n\
+       (set_global $GI (i32.add (get_global $GI) (i32.const 1)))\n\
+       (br 0)))\n\
+       (i32.sub (get_global $HP) (i32.shl %s (i32.const 2)))\n"
+      (smit_var env fvs n)
+      (smit_var env fvs a)
+      (smit_var env fvs n)
+
+  | AppDir(Id.Label "min_caml_make_float_array", [n; a]) ->
+    emit oc
+      "(set_global $GI (i32.const 0))\n\
+       (block\n
+        (loop\n\
+       (br_if 1 (i32.eq (get_global $GI) %s))\n\
+       (f64.store\n(get_global $HP) %s)\n\
+       (set_global $HP (i32.add (i32.const 8) (get_global $HP)))\n\
+       (set_global $GI (i32.add (get_global $GI) (i32.const 1)))\n\
+       (br 0)))\n\
+       (i32.sub (get_global $HP) (i32.shl %s (i32.const 3)))\n"
+      (smit_var env fvs n)
+      (smit_var env fvs a)
+      (smit_var env fvs n)
+
+  | AppDir(Id.Label "min_caml_make_array", _)
+  | AppDir(Id.Label "min_caml_make_float_array", _) ->
+    failwith "wrong number of arguments for array creation."
+
+  | _ ->
+    raise (Invalid_argument "emit_make_array: argument is not array.")
+
 
 let rec g oc env fvs = function
   | Unit ->
@@ -216,62 +273,9 @@ let rec g oc env fvs = function
     when M.mem a env && M.find a env = Type.Unit ->
     ()
 
-  | AppDir(Id.Label "min_caml_make_array", [n; a]) when M.mem a !funindex ->
-    (* function array *)
-    emit oc "(set_global $GI (i32.const 0))\n" ;
-    emit oc "(block\n(loop\n" ;
-    emit oc "(br_if 1 (i32.eq (get_global $GI)\n" ;
-    emit_var oc env fvs n ;
-    emit oc "))\n" ;
-    emit oc "(i32.store\n(get_global $HP)\n" ;
-    emit oc "(i32.const %i)\n" (M.find a !funindex).idx ;
-    emit oc ")\n" ;
-    emit oc "(set_global $HP (i32.add (i32.const 4) (get_global $HP)))\n" ;
-    emit oc "(set_global $GI\n" ;
-    emit oc "(i32.add (get_global $GI) (i32.const 1)))\n" ;
-    emit oc "(br 0)\n" ;
-    emit oc "))\n" ;
-    emit oc "(i32.sub (get_global $HP) (i32.shl %s (i32.const 2)))"
-      (smit_var env fvs n) ;
-
-  | AppDir(Id.Label "min_caml_make_array", [n; a]) ->
-    emit oc "(set_global $GI (i32.const 0))\n" ;
-    emit oc "(block\n(loop\n" ;
-    emit oc "(br_if 1 (i32.eq (get_global $GI)\n" ;
-    emit_var oc env fvs n ;
-    emit oc "))\n" ;
-    emit oc "(i32.store\n(get_global $HP)\n" ;
-    emit_var oc env fvs a ;
-    emit oc ")\n" ;
-    emit oc "(set_global $HP (i32.add (i32.const 4) (get_global $HP)))\n" ;
-    emit oc "(set_global $GI\n" ;
-    emit oc "(i32.add (get_global $GI) (i32.const 1)))\n" ;
-    emit oc "(br 0)\n" ;
-    emit oc "))\n" ;
-    emit oc "(i32.sub (get_global $HP) (i32.shl %s (i32.const 2)))"
-      (smit_var env fvs n) ;
-
-  | AppDir(Id.Label "min_caml_make_float_array", [n; a]) ->
-    emit oc "(set_global $GI (i32.const 0))\n" ;
-    emit oc "(block\n(loop\n" ;
-    emit oc "(br_if 1 (i32.eq (get_global $GI)\n" ;
-    emit_var oc env fvs n ;
-    emit oc "))\n" ;
-    emit oc "(f64.store\n(get_global $HP)\n" ;
-    emit_var oc env fvs a ;
-    emit oc ")\n" ;
-    emit oc "(set_global $HP (i32.add (i32.const 8) (get_global $HP)))\n" ;
-    emit oc "(set_global $GI\n" ;
-    emit oc "(i32.add (get_global $GI) (i32.const 1)))\n" ;
-    emit oc "(br 0)\n" ;
-    emit oc "))\n" ;
-    emit oc "(i32.sub (get_global $HP) (i32.shl %s (i32.const 3)))\n"
-      (smit_var env fvs n) ;
-
-
   | AppDir(Id.Label "min_caml_make_array", _)
-  | AppDir(Id.Label "min_caml_make_float_array", _) ->
-    failwith "wrong number of arguments for array creation."
+  | AppDir(Id.Label "min_caml_make_float_array", _) as mkarr ->
+    emit_make_array oc env fvs mkarr
 
   | AppDir(Id.Label name, args) ->
     emit oc "(call $%s %s)\n" name (smit_vars env fvs args)
