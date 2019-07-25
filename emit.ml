@@ -61,14 +61,14 @@ let rec local_vars = function
     []
 
 
-let ofst_of_ty = function
+let size_of_t = function
   | Type.Unit -> 0
   | Type.Float -> 8
   | _ -> 4
 
 
 (* convert Type.t to wasm type in string *)
-let rec wt_of_ty env = function
+let rec wt_of_t env = function
   | Type.Unit ->
     ""
 
@@ -83,10 +83,10 @@ let rec wt_of_ty env = function
     "i32"
 
   | Type.Var { contents = None } ->
-    failwith "wt_of_ty Var(ref(None))"
+    failwith "wt_of_t Var(ref(None))"
 
   | Type.Var { contents = Some t } ->
-    wt_of_ty env t
+    wt_of_t env t
 
 
 let smit_var env fvs id =
@@ -94,7 +94,7 @@ let smit_var env fvs id =
     begin match M.find id fvs with
       | Type.Unit, _ -> ""
       | t, o -> smit "(%s.load (i32.add (i32.const %i) (get_global $CL)))\n"
-                  (wt_of_ty env t) o
+                  (wt_of_t env t) o
     end
   else
     begin match M.find id env with
@@ -114,12 +114,12 @@ let smit_var env fvs id =
     | (x, t) :: _ when x = id ->
       if t <> Type.Unit then
         smit "(%s.load (i32.add (i32.const %i) (get_global $CL)))\n"
-          (wt_of_ty env t) (ofst + (ofst_of_ty t))
+          (wt_of_t env t) (ofst + (size_of_t t))
       else
         ""
 
     | (_, t) :: xs  ->
-      smit_var' (ofst + (ofst_of_ty t)) xs
+      smit_var' (ofst + (size_of_t t)) xs
    in
    smit_var' 0 fvs
 *)
@@ -213,8 +213,8 @@ let rec g oc env fvs = function
 
   | IfEq(x, y, e1, e2, t) ->
     emit oc "(if (result %s) (%s.eq %s %s)\n"
-      (wt_of_ty env t)
-      (wt_of_ty env (M.find x env))
+      (wt_of_t env t)
+      (wt_of_t env (M.find x env))
       (smit_var env fvs x)
       (smit_var env fvs y) ;
     emit oc "(then\n" ; g oc env fvs e1 ; emit oc ")\n" ;
@@ -225,8 +225,8 @@ let rec g oc env fvs = function
 
   | IfLE(x, y, e1, e2, t) ->
     emit oc "(if (result %s) (%s.le_s %s %s)\n"
-      (wt_of_ty env t)
-      (wt_of_ty env (M.find x env))
+      (wt_of_t env t)
+      (wt_of_t env (M.find x env))
       (smit_var env fvs x)
       (smit_var env fvs y) ;
     emit oc "(then\n" ; g oc env fvs e1 ; emit oc ")\n" ;
@@ -245,7 +245,7 @@ let rec g oc env fvs = function
 
   | MakeCls((id, t), { entry = Id.Label(n) ; actual_fv }, e) ->
     let info = M.find n !funindex in
-    let fvos = List.map (fun (_, t) -> ofst_of_ty t) info.fn.formal_fv in
+    let fvos = List.map (fun (_, t) -> size_of_t t) info.fn.formal_fv in
     let size = (List.fold_left (+) 4 fvos) in
     emit oc
       "(; get HP ;)\n\
@@ -313,7 +313,7 @@ let rec g oc env fvs = function
     (* reverse order *)
     let xs' = List.rev xs in
     let ts = List.map (fun x -> M.find x env) xs' in
-    let offsets = List.map ofst_of_ty ts in
+    let offsets = List.map size_of_t ts in
     let tos = List.map2 (fun t o -> (t, o)) ts offsets in
     emit oc "(set_global $HP (i32.add (i32.const %i) (get_global $HP)))\n"
       (List.fold_left (+) 0 offsets) ;
@@ -322,7 +322,7 @@ let rec g oc env fvs = function
       (fun x (t, o) ->
          cur := !cur + o ;
          emit oc "(%s.store (i32.sub (get_global $HP) (i32.const %i)) %s)\n"
-           (wt_of_ty env t) !cur (smit_var env fvs x))
+           (wt_of_t env t) !cur (smit_var env fvs x))
       xs'
       tos ;
     emit oc "(i32.sub (get_global $HP) (i32.const %i))\n" !cur ;
@@ -332,8 +332,8 @@ let rec g oc env fvs = function
     List.iter
       (fun (x, t) ->
          emit oc "(set_local $%s (%s.load (i32.add (i32.const %i) %s)))\n"
-           x (wt_of_ty env t) !cur (smit_var env fvs y) ;
-         cur := !cur + (ofst_of_ty t))
+           x (wt_of_t env t) !cur (smit_var env fvs y) ;
+         cur := !cur + (size_of_t t))
       xts ;
     g oc (M.add_list xts env) fvs e
 
@@ -416,7 +416,7 @@ let funinfo_ty_index fun_infos =
 
 let emit_local oc = function
   | _, Type.Unit -> ()
-  | x, t -> emit oc "(local $%s %s)\n" x (wt_of_ty M.empty t)
+  | x, t -> emit oc "(local $%s %s)\n" x (wt_of_t M.empty t)
 
 
 let emit_locals oc e =
@@ -431,16 +431,16 @@ let emit_locals oc e =
 
 let emit_label_param oc = function
   | _, Type.Unit -> ()
-  | label, t -> emit oc " (param $%s %s)" label (wt_of_ty M.empty t)
+  | label, t -> emit oc " (param $%s %s)" label (wt_of_t M.empty t)
 
 
 let emit_param oc = function
   | Type.Unit -> ()
-  | t -> emit oc " (param %s)" (wt_of_ty M.empty t)
+  | t -> emit oc " (param %s)" (wt_of_t M.empty t)
 
 
 let emit_result oc t =
-  emit oc " (result %s)" (wt_of_ty M.empty t)
+  emit oc " (result %s)" (wt_of_t M.empty t)
 
 
 (* emit module sections *)
@@ -520,7 +520,7 @@ let emit_fundefs oc fundefs =
              (List.map2
                 (fun (id, t) o -> id, (t, o))
                 formal_fv
-                (let _, ts = sep_pairs formal_fv in fold_sums ofst_of_ty ts)
+                (let _, ts = sep_pairs formal_fv in fold_sums size_of_t ts)
              )
              M.empty)
           body ;
