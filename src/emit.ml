@@ -127,6 +127,7 @@ let emit_make_array oc env fvs = function
   | AppDir(Id.Label "min_caml_make_array", [n; a]) ->
     emit oc
       "(global.set $GA (i32.const 0))\n\
+       (global.set $GB (global.get $HP))\n\
        (block\n\
        (loop\n\
        (br_if 1 (i32.eq (global.get $GA) %s))\n\
@@ -134,18 +135,18 @@ let emit_make_array oc env fvs = function
        (global.set $HP (i32.add (i32.const 4) (global.get $HP)))\n\
        (global.set $GA (i32.add (global.get $GA) (i32.const 1)))\n\
        (br 0)))\n\
-       (i32.sub (global.get $HP) (i32.shl %s (i32.const 2)))\n"
+       (global.get $GB)\n"
       (smit_var env fvs n)
       (if M.mem a !funindex then
          (* immediate function array *)
          smit "(i32.const %i)" (M.find a !funindex).idx
        else
          smit_var env fvs a)
-      (smit_var env fvs n)
 
   | AppDir(Id.Label "min_caml_make_float_array", [n; a]) ->
     emit oc
       "(global.set $GA (i32.const 0))\n\
+       (global.set $GB (global.get $HP))\n\
        (block\n\
        (loop\n\
        (br_if 1 (i32.eq (global.get $GA) %s))\n\
@@ -153,10 +154,9 @@ let emit_make_array oc env fvs = function
        (global.set $HP (i32.add (i32.const 8) (global.get $HP)))\n\
        (global.set $GA (i32.add (global.get $GA) (i32.const 1)))\n\
        (br 0)))\n\
-       (i32.sub (global.get $HP) (i32.shl %s (i32.const 3)))\n"
+       (global.get $GB)\n"
       (smit_var env fvs n)
       (smit_var env fvs a)
-      (smit_var env fvs n)
 
   | _ ->
     failwith "emit_make_array"
@@ -455,9 +455,9 @@ let emit_globals oc =
   emit oc "(global $HP (mut i32) (i32.const 0))\n" ;
   (* closure pointer *)
   emit oc "(global $CL (mut i32) (i32.const 0))\n" ;
-  (* generic 32-bit register, currently only used for looping *)
-  emit oc "(global $GA (mut i32) (i32.const 0))\n\n"
-
+  (* generic 32-bit registers *)
+  emit oc "(global $GA (mut i32) (i32.const 0))\n\
+           (global $GB (mut i32) (i32.const 0))\n\n"
 
 let emit_table oc fds =
   emit oc
