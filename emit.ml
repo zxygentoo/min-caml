@@ -30,6 +30,19 @@ let emit = Printf.fprintf
 let smit = Printf.sprintf
 
 
+
+let fold_sums f xs =
+  let rec fold_sums' acc = function
+    | [] ->
+      []
+
+    | x :: xs ->
+      let acc' = acc + f x in
+      acc' :: (fold_sums' acc' xs)
+  in
+  fold_sums' 0 xs
+
+
 let rec local_vars = function
   | Let(xt, e1, e2) ->
     xt :: local_vars e1 @ local_vars e2
@@ -77,7 +90,21 @@ let rec wt_of_ty env = function
 
 
 let smit_var env fvs id =
-  let rec smit_var' ofst = function
+  if M.mem id fvs then
+    begin match M.find id fvs with
+      | Type.Unit, _ -> ""
+      | t, o -> smit "(%s.load (i32.add (i32.const %i) (get_global $CL)))\n"
+                  (wt_of_ty env t) o
+    end
+  else
+    begin match M.find id env with
+      | Type.Unit -> ""
+      | _ -> smit "(get_local $%s)\n" id
+    end
+
+
+(* let smit_var env fvs id =
+   let rec smit_var' ofst = function
     | [] ->
       if M.find id env <> Type.Unit then
         smit "(get_local $%s)\n" id
@@ -93,9 +120,9 @@ let smit_var env fvs id =
 
     | (_, t) :: xs  ->
       smit_var' (ofst + (ofst_of_ty t)) xs
-  in
-  smit_var' 0 fvs
-
+   in
+   smit_var' 0 fvs
+*)
 
 let smit_vars env fvs args =
   Id.pp_list (List.map (smit_var env fvs) args)
@@ -469,6 +496,14 @@ let emit_types oc sigs =
     (TM.bindings sigs)
 
 
+let sep_pairs xs =
+  let rec sep_pairs' acc_a acc_b = function
+    | [] -> acc_a, acc_b
+    | (a, b) :: xs -> sep_pairs' (a :: acc_a) (b :: acc_b) xs
+  in
+  sep_pairs' [] [] xs
+
+
 let emit_fundefs oc fundefs =
   List.iter
     (function
@@ -478,7 +513,17 @@ let emit_fundefs oc fundefs =
         emit_result oc t ;
         emit oc "\n" ;
         emit_locals oc body ;
-        g oc (M.add_list (args @ formal_fv) M.empty) formal_fv body ;
+        g 
+          oc
+          (M.add_list (args @ formal_fv) M.empty)
+          (M.add_list
+             (List.map2
+                (fun (id, t) o -> id, (t, o))
+                formal_fv
+                (let _, ts = sep_pairs formal_fv in fold_sums ofst_of_ty ts)
+             )
+             M.empty)
+          body ;
         emit oc ")\n\n"
 
       | _ ->
