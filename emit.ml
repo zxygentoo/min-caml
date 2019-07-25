@@ -67,7 +67,6 @@ let size_of_t = function
   | _ -> 4
 
 
-(* convert Type.t to wasm type in string *)
 let rec wt_of_t env = function
   | Type.Unit ->
     ""
@@ -90,42 +89,27 @@ let rec wt_of_t env = function
 
 
 let smit_var env fvs id =
+  (*   if M.mem id !funindex then
+       (* function *)
+       smit "(i32.const %i)\n" (M.find id !funindex).idx
+       else *)
   if M.mem id fvs then
+    (* free vars *)
     begin match M.find id fvs with
       | Type.Unit, _ -> ""
       | t, o -> smit "(%s.load (i32.add (i32.const %i) (get_global $CL)))\n"
                   (wt_of_t env t) o
     end
   else
+    (* locals *)
     begin match M.find id env with
       | Type.Unit -> ""
       | _ -> smit "(get_local $%s)\n" id
     end
 
 
-(* let smit_var env fvs id =
-   let rec smit_var' ofst = function
-    | [] ->
-      if M.find id env <> Type.Unit then
-        smit "(get_local $%s)\n" id
-      else
-        ""
-
-    | (x, t) :: _ when x = id ->
-      if t <> Type.Unit then
-        smit "(%s.load (i32.add (i32.const %i) (get_global $CL)))\n"
-          (wt_of_t env t) (ofst + (size_of_t t))
-      else
-        ""
-
-    | (_, t) :: xs  ->
-      smit_var' (ofst + (size_of_t t)) xs
-   in
-   smit_var' 0 fvs
-*)
-
 let smit_vars env fvs args =
-  Id.pp_list (List.map (smit_var env fvs) args)
+  Id.pp_list_sep "" (List.map (smit_var env fvs) args)
 
 
 let emit_var oc env fvs id =

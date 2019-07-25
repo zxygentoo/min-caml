@@ -8,7 +8,7 @@ type label = Label of string
 let compare = Pervasives.compare
 
 
-let rec pp_list = function
+let rec pp_list_sep sep = function
   | [] ->
     ""
 
@@ -16,7 +16,11 @@ let rec pp_list = function
     x
 
   | x :: xs ->
-    x ^ " " ^ pp_list xs
+    x ^ sep ^ pp_list_sep sep xs
+
+
+let pp_list =
+  pp_list_sep " "
 
 
 let counter = ref 0
