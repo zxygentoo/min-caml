@@ -36,7 +36,7 @@ test : clean mincaml $(DIFFS)
 	ocaml $< > $@
 
 clean :
-	rm -rf $(WATS) $(WASMS) $(ANSWERS) $(RESULTS) mincaml
+	rm -rf mincaml $(TESTSDIR)/*.{wat,result,answer}
 	dune clean
 
 .PHONY : clean test mincaml

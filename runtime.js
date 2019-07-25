@@ -19,7 +19,7 @@ const core = {
 };
 
 
-const run_wat = filename => {
+const run_wat = (filename, debug) => {
     return WebAssembly.instantiate(
         wabt.parseWat(
             filename,

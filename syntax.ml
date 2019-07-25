@@ -25,8 +25,8 @@ type t =
   | Get of t * t
   | Put of t * t * t
 
-and fundef = {
-  name : Id.t * Type.t;
-  args : (Id.t * Type.t) list;
-  body : t
-}
+and fundef =
+  { name : Id.t * Type.t
+  ; args : (Id.t * Type.t) list
+  ; body : t
+  }

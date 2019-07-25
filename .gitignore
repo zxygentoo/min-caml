@@ -28,3 +28,5 @@ tests/*
 # js
 node_modules/
 npm-debug.*
+package.json
+package-lock.json

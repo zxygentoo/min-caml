@@ -21,8 +21,7 @@ opam install dune
 ### JavaScript dependencies
 
 ```
-cd min-ocaml-wasm
-npm install
+npm install wabt
 ```
 
 - [wabt](https://www.npmjs.com/package/wabt): for parsing emitted ```.wat``` file to WebAssembly module.
