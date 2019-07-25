@@ -508,10 +508,10 @@ let emit_fundefs oc fundefs =
 
 let emit_start oc start =
   emit_fundefs oc [
-    { name = (Id.Label "start", Type.Fun([], Type.Unit))
+    { name = (Id.Label "$start", Type.Fun([], Type.Unit))
     ; args = [] ; formal_fv = [] ; body = start }
-  ] ;
-  emit oc "(export \"start\" (func $start))"
+  ]
+  (* emit oc "(export \"start\" (func $start))" *)
 
 
 (* emit module *)
@@ -527,4 +527,5 @@ let emitcode oc (Prog(fundefs, start)) =
   emit_types oc !funtyindex ;
   emit_fundefs oc fundefs ;
   emit_start oc start ;
+  emit oc "(start $$start)" ;
   emit oc ")"
