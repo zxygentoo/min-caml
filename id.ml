@@ -9,14 +9,9 @@ let compare = Pervasives.compare
 
 
 let rec pp_list_sep sep = function
-  | [] ->
-    ""
-
-  | [x] ->
-    x
-
-  | x :: xs ->
-    x ^ sep ^ pp_list_sep sep xs
+  | [] -> ""
+  | [x] -> x
+  | x :: xs -> x ^ sep ^ pp_list_sep sep xs
 
 
 let pp_list =

@@ -30,17 +30,24 @@ let emit = Printf.fprintf
 let smit = Printf.sprintf
 
 
+let sep_pairs xs =
+  let rec sep_pairs' acc_a acc_b = function
+    | [] -> acc_a, acc_b
+    | (a, b) :: xs -> sep_pairs' (a :: acc_a) (b :: acc_b) xs
+  in
+  sep_pairs' [] [] xs
+
 
 let fold_sums f xs =
   let rec fold_sums' acc = function
-    | [] ->
-      []
-
-    | x :: xs ->
-      let acc' = acc + f x in
-      acc' :: (fold_sums' acc' xs)
+    | [] -> []
+    | x :: xs -> let acc' = acc + f x in acc' :: (fold_sums' acc' xs)
   in
   fold_sums' 0 xs
+
+
+let shift_left_hd xs =
+  0 :: (xs |> List.rev |> List.tl |> List.rev)
 
 
 let rec local_vars = function
@@ -89,13 +96,10 @@ let rec wt_of_t env = function
 
 
 let smit_var env fvs id =
-  (*   if M.mem id !funindex then
-       (* function *)
-       smit "(i32.const %i)\n" (M.find id !funindex).idx
-       else *)
   if M.mem id fvs then
     (* free vars *)
-    begin match M.find id fvs with
+    begin
+      match M.find id fvs with
       | Type.Unit, _ -> ""
       | t, o -> smit "(%s.load (i32.add (i32.const %i) (get_global $CL)))\n"
                   (wt_of_t env t) o
@@ -122,13 +126,13 @@ let emit_var oc env fvs id =
 let emit_make_array oc env fvs = function
   | AppDir(Id.Label "min_caml_make_array", [n; a]) ->
     emit oc
-      "(set_global $GI (i32.const 0))\n\
+      "(set_global $GA (i32.const 0))\n\
        (block\n\
        (loop\n\
-       (br_if 1 (i32.eq (get_global $GI) %s))\n\
+       (br_if 1 (i32.eq (get_global $GA) %s))\n\
        (i32.store\n(get_global $HP) %s)\n\
        (set_global $HP (i32.add (i32.const 4) (get_global $HP)))\n\
-       (set_global $GI (i32.add (get_global $GI) (i32.const 1)))\n\
+       (set_global $GA (i32.add (get_global $GA) (i32.const 1)))\n\
        (br 0)))\n\
        (i32.sub (get_global $HP) (i32.shl %s (i32.const 2)))\n"
       (smit_var env fvs n)
@@ -141,13 +145,13 @@ let emit_make_array oc env fvs = function
 
   | AppDir(Id.Label "min_caml_make_float_array", [n; a]) ->
     emit oc
-      "(set_global $GI (i32.const 0))\n\
+      "(set_global $GA (i32.const 0))\n\
        (block\n\
        (loop\n\
-       (br_if 1 (i32.eq (get_global $GI) %s))\n\
+       (br_if 1 (i32.eq (get_global $GA) %s))\n\
        (f64.store\n(get_global $HP) %s)\n\
        (set_global $HP (i32.add (i32.const 8) (get_global $HP)))\n\
-       (set_global $GI (i32.add (get_global $GI) (i32.const 1)))\n\
+       (set_global $GA (i32.add (get_global $GA) (i32.const 1)))\n\
        (br 0)))\n\
        (i32.sub (get_global $HP) (i32.shl %s (i32.const 3)))\n"
       (smit_var env fvs n)
@@ -227,10 +231,11 @@ let rec g oc env fvs = function
   | Var id ->
     emit_var oc env fvs id
 
-  | MakeCls((id, t), { entry = Id.Label(n) ; actual_fv }, e) ->
-    let info = M.find n !funindex in
-    let fvos = List.map (fun (_, t) -> size_of_t t) info.fn.formal_fv in
-    let size = (List.fold_left (+) 4 fvos) in
+  | MakeCls((id, t), { entry = Id.Label fname ; actual_fv }, e) ->
+    let ts = List.map (fun x -> M.find x env) actual_fv in
+    let ss = List.map size_of_t ts in
+    let os = fold_sums (fun x -> x) ss in
+    let total_size = (List.fold_left (+) 4 ss) in
     emit oc
       "(; get HP ;)\n\
        (set_local $%s (get_global $HP))\n\
@@ -239,18 +244,16 @@ let rec g oc env fvs = function
        (; store func pointer ;)\n\
        (i32.store (get_local $%s) (i32.const %i))\n\
        (; fvs ;)\n"
-      id size id info.idx ;
-    let cur = ref 0 in
+      id total_size id (M.find fname !funindex).idx ;
     List.iter2
-      (fun offset fv ->
-         cur := !cur + offset ;
+      (fun fv o ->
          emit oc "(i32.store (i32.add (i32.const %i) (get_local $%s)) %s)\n"
-           !cur id (smit_var env fvs fv))
-      fvos
-      actual_fv ;
+           o id (smit_var env fvs fv))
+      actual_fv 
+      os ;
     g oc (M.add id t env) fvs e
 
-  | AppCls(name, args) when M.mem name env ->
+  | AppCls(id, args) when M.mem id env ->
     emit oc
       "(; backup CL ;)\n\
        (set_local $$cl_bak (get_global $CL))\n\
@@ -263,15 +266,15 @@ let rec g oc env fvs = function
        (i32.load (get_global $CL)))\n\
        (; restore CL ;)\n\
        (set_global $CL (get_local $$cl_bak))\n"
-      (smit_var env fvs name)
-      (TM.find (M.find name env) !funtyindex).ty_idx
+      (smit_var env fvs id)
+      (TM.find (M.find id env) !funtyindex)
       (smit_vars env fvs args)
 
-  | AppCls(name, args) ->
+  | AppCls(id, args) ->
     (* for indirect recursive self-calls,
        no need to actually make the closre (and backup/restore $CL),
        because 'someone' must have done it. *)
-    let info = (M.find name !funindex) in
+    let info = (M.find id !funindex) in
     emit oc 
       "(call_indirect (type %s)\n\
        (; bvs ;)\n\
@@ -290,35 +293,35 @@ let rec g oc env fvs = function
   | AppDir(Id.Label "min_caml_make_float_array", _) as e ->
     emit_make_array oc env fvs e
 
-  | AppDir(Id.Label name, args) ->
-    emit oc "(call $%s %s)\n" name (smit_vars env fvs args)
+  | AppDir(Id.Label label, args) ->
+    emit oc "(call $%s %s)\n" label (smit_vars env fvs args)
 
   | Tuple xs ->
-    (* reverse order *)
-    let xs' = List.rev xs in
-    let ts = List.map (fun x -> M.find x env) xs' in
-    let offsets = List.map size_of_t ts in
-    let tos = List.map2 (fun t o -> (t, o)) ts offsets in
-    emit oc "(set_global $HP (i32.add (i32.const %i) (get_global $HP)))\n"
-      (List.fold_left (+) 0 offsets) ;
-    let cur = ref 0 in
+    let ts = List.map (fun x -> M.find x env) xs in
+    let ss = List.map size_of_t ts in
+    let total_size = List.fold_left (+) 0 ss in
+    let os = shift_left_hd (fold_sums (fun x -> x) ss) in
+    emit oc
+      "(set_global $GA (get_global $HP))\n\
+       (set_global $HP (i32.add (i32.const %i) (get_global $HP)))\n"
+      total_size ;
     List.iter2
       (fun x (t, o) ->
-         cur := !cur + o ;
-         emit oc "(%s.store (i32.sub (get_global $HP) (i32.const %i)) %s)\n"
-           (wt_of_t env t) !cur (smit_var env fvs x))
-      xs'
-      tos ;
-    emit oc "(i32.sub (get_global $HP) (i32.const %i))\n" !cur ;
+         emit oc "(%s.store (i32.add (get_global $GA) (i32.const %i)) %s)\n"
+           (wt_of_t env t) o (smit_var env fvs x))
+      xs
+      (List.map2 (fun t o -> (t, o)) ts os) ;
+    emit oc "(get_global $GA)\n"
 
   | LetTuple(xts, y, e) ->
-    let cur = ref 0 in
-    List.iter
-      (fun (x, t) ->
+    let _, ts = sep_pairs xts in
+    let os = shift_left_hd (fold_sums size_of_t ts) in
+    List.iter2
+      (fun (x, t) o ->
          emit oc "(set_local $%s (%s.load (i32.add (i32.const %i) %s)))\n"
-           x (wt_of_t env t) !cur (smit_var env fvs y) ;
-         cur := !cur + (size_of_t t))
-      xts ;
+           x (wt_of_t env t) o (smit_var env fvs y))
+      xts
+      os ;
     g oc (M.add_list xts env) fvs e
 
   | Get(x, y) ->
@@ -388,19 +391,15 @@ let infos_of_fundefs fundefs sigs =
     fundefs
 
 
-let funinfo_name_index fun_infos =
+let funinfo_index fun_infos =
   M.add_list (List.map (fun e -> e.id, e) fun_infos) M.empty
-
-
-let funinfo_ty_index fun_infos =
-  List.fold_left (fun tm e -> TM.add e.ty e tm) TM.empty fun_infos
 
 
 (* emit helpers *)
 
 let emit_local oc = function
   | _, Type.Unit -> ()
-  | x, t -> emit oc "(local $%s %s)\n" x (wt_of_t M.empty t)
+  | name, t -> emit oc "(local $%s %s)\n" name (wt_of_t M.empty t)
 
 
 let emit_locals oc e =
@@ -420,11 +419,12 @@ let emit_label_param oc = function
 
 let emit_param oc = function
   | Type.Unit -> ()
-  | t -> emit oc " (param %s)" (wt_of_t M.empty t)
+  | _ as t -> emit oc " (param %s)" (wt_of_t M.empty t)
 
 
-let emit_result oc t =
-  emit oc " (result %s)" (wt_of_t M.empty t)
+let emit_result oc = function
+  | Type.Unit -> ()
+  | _ as t -> emit oc " (result %s)" (wt_of_t M.empty t)
 
 
 (* emit module sections *)
@@ -456,7 +456,7 @@ let emit_globals oc =
   (* closure pointer *)
   emit oc "(global $CL (mut i32) (i32.const 0))\n" ;
   (* generic 32-bit register, currently only used for looping *)
-  emit oc "(global $GI (mut i32) (i32.const 0))\n\n"
+  emit oc "(global $GA (mut i32) (i32.const 0))\n\n"
 
 
 let emit_table oc fds =
@@ -480,15 +480,12 @@ let emit_types oc sigs =
     (TM.bindings sigs)
 
 
-let sep_pairs xs =
-  let rec sep_pairs' acc_a acc_b = function
-    | [] -> acc_a, acc_b
-    | (a, b) :: xs -> sep_pairs' (a :: acc_a) (b :: acc_b) xs
-  in
-  sep_pairs' [] [] xs
-
-
 let emit_fundefs oc fundefs =
+  let fvindex formal_fv =
+    let _, ts = sep_pairs formal_fv in
+    let os = fold_sums size_of_t ts in
+    (List.map2 (fun (id, t) o -> id, (t, o)) formal_fv os)
+  in
   List.iter
     (function
       | { name = (Id.Label n, Type.Fun(_, t)) ; args ; formal_fv ; body } ->
@@ -497,17 +494,11 @@ let emit_fundefs oc fundefs =
         emit_result oc t ;
         emit oc "\n" ;
         emit_locals oc body ;
-        g 
-          oc
-          (M.add_list (args @ formal_fv) M.empty)
-          (M.add_list
-             (List.map2
-                (fun (id, t) o -> id, (t, o))
-                formal_fv
-                (let _, ts = sep_pairs formal_fv in fold_sums size_of_t ts)
-             )
-             M.empty)
-          body ;
+        (
+          let env = M.add_list (args @ formal_fv) M.empty in
+          let fvs = M.add_list (fvindex formal_fv) M.empty in
+          g oc env fvs body
+        ) ;
         emit oc ")\n\n"
 
       | _ ->
@@ -526,16 +517,14 @@ let emit_start oc start =
 (* emit module *)
 
 let emitcode oc (Prog(fundefs, start)) =
-  let sigs = funsig_index fundefs in
-  let infos = infos_of_fundefs fundefs sigs in
-  funindex := funinfo_name_index infos ;
-  funtyindex := funinfo_ty_index infos ;
+  funtyindex := funsig_index fundefs ;
+  funindex := funinfo_index (infos_of_fundefs fundefs !funtyindex) ;
   emit oc "(module\n" ;
   emit_imports oc ;
   emit_memory oc ;
   emit_globals oc ;
   emit_table oc fundefs ;
-  emit_types oc sigs ;
+  emit_types oc !funtyindex ;
   emit_fundefs oc fundefs ;
   emit_start oc start ;
   emit oc ")"

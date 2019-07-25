@@ -19,7 +19,16 @@ const core = {
 };
 
 
-const run_wat = filename => {
+const run_wat = (filename, debug) => {
+    if (debug == true) {
+        console.log(
+            wabt.parseWat(
+                filename, fs.readFileSync(filename).toString()
+            ).toText(
+                { foldExprs: false, inlineExport: false })
+            );
+    };
+
     return WebAssembly.instantiate(
         wabt.parseWat(
             filename,
@@ -36,4 +45,4 @@ const run_wat = filename => {
 };
 
 
-run_wat(process.argv[2]);
+run_wat(process.argv[2], false);
