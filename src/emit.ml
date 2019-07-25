@@ -19,12 +19,14 @@ type fun_info =
   ; fn : Closure.fundef
   }
 
-(* fun_info lookup by function name *)
+(* function information lookup by name *)
 let funindex = ref M.empty
 
-(* function type index lookup by function type *)
+(* function type index lookup by type *)
 let funtyindex = ref TM.empty
 
+
+(* general helpers *)
 
 let emit = Printf.fprintf
 let smit = Printf.sprintf
@@ -50,23 +52,7 @@ let hd_based xs =
   0 :: (xs |> List.rev |> List.tl |> List.rev)
 
 
-let rec local_vars = function
-  | Let(xt, e1, e2) ->
-    xt :: local_vars e1 @ local_vars e2
-
-  | MakeCls(xt, _, e) ->
-    xt :: local_vars e
-
-  | IfEq(_, _, e1, e2, _)
-  | IfLE(_, _, e1, e2, _) ->
-    local_vars e1 @ local_vars e2
-
-  | LetTuple(xts, _, e) ->
-    xts @ local_vars e
-
-  | _ ->
-    []
-
+(* types and sizes *)
 
 let size_of_t = function
   | Type.Unit -> 0
@@ -95,6 +81,8 @@ let rec wt_of_t env = function
     wt_of_t env t
 
 
+(* emit var *)
+
 let smit_var env fvs id =
   if M.mem id fvs then
     (* free vars *)
@@ -120,7 +108,7 @@ let emit_var oc env fvs id =
   emit oc "%s" (smit_var env fvs id)
 
 
-(* currently nodejs doesn't support WebAssembly.Global API,
+(* Currently NodeJS doesn't support WebAssembly.Global API,
    so these array making functions will be quite annoying to write as
    JavaScript externals, for now we just do it in WebAssembly. *)
 let emit_make_array oc env fvs = function
@@ -161,6 +149,8 @@ let emit_make_array oc env fvs = function
   | _ ->
     failwith "emit_make_array"
 
+
+(* emit expression *)
 
 let rec g oc env fvs = function
   | Unit ->
@@ -397,21 +387,6 @@ let funinfo_index fun_infos =
 
 (* emit helpers *)
 
-let emit_local oc = function
-  | _, Type.Unit -> ()
-  | name, t -> emit oc "(local $%s %s)\n" name (wt_of_t M.empty t)
-
-
-let emit_locals oc e =
-  List.iter (emit_local oc) (local_vars e) ;
-  (* additional CL backup,
-     we can eliminate this when `e` doesn't contain MakeCLS,
-     but the additional check just seems not worth it,
-     and in a real production system, 
-     you will most certainly have a backend optimization for that anyway. *)
-  emit oc "(local $$cl_bak i32)\n"
-
-
 let emit_label_param oc = function
   | _, Type.Unit -> ()
   | label, t -> emit oc " (param $%s %s)" label (wt_of_t M.empty t)
@@ -425,6 +400,39 @@ let emit_param oc = function
 let emit_result oc = function
   | Type.Unit -> ()
   | _ as t -> emit oc " (result %s)" (wt_of_t M.empty t)
+
+
+let rec gather_locals = function
+  | Let(xt, e1, e2) ->
+    xt :: gather_locals e1 @ gather_locals e2
+
+  | MakeCls(xt, _, e) ->
+    xt :: gather_locals e
+
+  | IfEq(_, _, e1, e2, _)
+  | IfLE(_, _, e1, e2, _) ->
+    gather_locals e1 @ gather_locals e2
+
+  | LetTuple(xts, _, e) ->
+    xts @ gather_locals e
+
+  | _ ->
+    []
+
+
+let emit_local oc = function
+  | _, Type.Unit -> ()
+  | name, t -> emit oc "(local $%s %s)\n" name (wt_of_t M.empty t)
+
+
+let emit_locals oc e =
+  List.iter (emit_local oc) (gather_locals e) ;
+  (* additional CL backup,
+     we can eliminate this when `e` doesn't contain MakeCLS,
+     but the additional check just seems not worth it,
+     and in a real production system, 
+     you will most certainly have a backend optimization for that anyway. *)
+  emit oc "(local $$cl_bak i32)\n"
 
 
 (* emit module sections *)
