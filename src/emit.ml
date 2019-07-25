@@ -122,7 +122,7 @@ let emit_var oc env fvs id =
 
 (* currently nodejs doesn't support WebAssembly.Global API,
    so these array making functions will be quite annoying to write as
-   JavaScript externals, so we just do it within WebAssembly (for now). *)
+   JavaScript externals, for now we just do it in WebAssembly. *)
 let emit_make_array oc env fvs = function
   | AppDir(Id.Label "min_caml_make_array", [n; a]) ->
     emit oc
