@@ -46,7 +46,7 @@ let fold_sums f xs =
   fold_sums' 0 xs
 
 
-let shift_left_hd xs =
+let hd_based xs =
   0 :: (xs |> List.rev |> List.tl |> List.rev)
 
 
@@ -300,7 +300,7 @@ let rec g oc env fvs = function
     let ts = List.map (fun x -> M.find x env) xs in
     let ss = List.map size_of_t ts in
     let total_size = List.fold_left (+) 0 ss in
-    let os = shift_left_hd (fold_sums (fun x -> x) ss) in
+    let os = hd_based (fold_sums (fun x -> x) ss) in
     emit oc
       "(global.set $GA (global.get $HP))\n\
        (global.set $HP (i32.add (i32.const %i) (global.get $HP)))\n"
@@ -315,7 +315,7 @@ let rec g oc env fvs = function
 
   | LetTuple(xts, y, e) ->
     let _, ts = sep_pairs xts in
-    let os = shift_left_hd (fold_sums size_of_t ts) in
+    let os = hd_based (fold_sums size_of_t ts) in
     List.iter2
       (fun (x, t) o ->
          emit oc "(set_local $%s (%s.load (i32.add (i32.const %i) %s)))\n"
