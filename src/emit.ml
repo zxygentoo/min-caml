@@ -10,7 +10,7 @@ module TM = Map.Make(T_)
 module TS = Set.Make(T_)
 
 
-(* holding various information about fundef *)
+(* holding various information about functions *)
 type fun_info =
   { id : Id.t
   ; ty : Type.t
@@ -19,10 +19,10 @@ type fun_info =
   ; fn : Closure.fundef
   }
 
-(* fun_info lookup by name *)
+(* fun_info lookup by function name *)
 let funindex = ref M.empty
 
-(* fun_info lookup by typ *)
+(* function type index lookup by function type *)
 let funtyindex = ref TM.empty
 
 
