@@ -456,6 +456,7 @@ let emit_globals oc =
   emit oc "(global $GA (mut i32) (i32.const 0))\n\
            (global $GB (mut i32) (i32.const 0))\n\n"
 
+
 let emit_table oc fds =
   emit oc
     "(table %d anyfunc)\n(elem (i32.const 0) %s)\n\n"
