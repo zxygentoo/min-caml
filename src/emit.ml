@@ -61,24 +61,15 @@ let size_of_t = function
 
 
 let rec wt_of_t env = function
-  | Type.Unit ->
-    ""
-
-  | Type.Float ->
-    "f64"
-
+  | Type.Unit -> ""
+  | Type.Float -> "f64"
   | Type.Int
   | Type.Bool
   | Type.Fun _
   | Type.Tuple _
-  | Type.Array _ ->
-    "i32"
-
-  | Type.Var { contents = None } ->
-    failwith "wt_of_t"
-
-  | Type.Var { contents = Some t } ->
-    wt_of_t env t
+  | Type.Array _ -> "i32"
+  | Type.Var { contents = Some t } -> wt_of_t env t
+  | Type.Var { contents = None } -> failwith "wt_of_t"
 
 
 (* emit var *)
@@ -102,10 +93,6 @@ let smit_var env fvs id =
 
 let smit_vars env fvs args =
   Id.pp_list_sep "" (List.map (smit_var env fvs) args)
-
-
-let emit_var oc env fvs id =
-  emit oc "%s" (smit_var env fvs id)
 
 
 (* Currently NodeJS doesn't support WebAssembly.Global API,
@@ -215,11 +202,13 @@ let rec g oc env fvs = function
     g oc (M.add id Type.Unit env) fvs e2
 
   | Let((id, t), e1, e2) ->
-    emit oc "(set_local $%s " id ; g oc env fvs e1 ; emit oc ")\n" ;
+    emit oc "(set_local $%s " id ;
+    g oc env fvs e1 ;
+    emit oc ")\n" ;
     g oc (M.add id t env) fvs e2
 
   | Var id ->
-    emit_var oc env fvs id
+    emit oc "%s" (smit_var env fvs id)
 
   | MakeCls((id, t), { entry = Id.Label fname ; actual_fv }, e) ->
     let ts = List.map (fun x -> M.find x env) actual_fv in
@@ -261,9 +250,9 @@ let rec g oc env fvs = function
       (smit_vars env fvs args)
 
   | AppCls(id, args) ->
-    (* for indirect recursive self-calls,
+    (* For indirect recursive self-calls,
        no need to actually make the closre (and backup/restore $CL),
-       because 'someone' must have done it. *)
+       because someone must have done it. *)
     let info = (M.find id !funindex) in
     emit oc 
       "(call_indirect (type %s)\n\
@@ -358,8 +347,8 @@ let rec g oc env fvs = function
         failwith "Put"
     end
 
-  | ExtArray Id.Label x ->
-    emit oc "(global.get $min_caml_%s)" x
+  | ExtArray Id.Label label ->
+    emit oc "(global.get $min_caml_%s)" label
 
 
 (* function index building *)
