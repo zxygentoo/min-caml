@@ -89,7 +89,7 @@ let rec wt_of_t env = function
     "i32"
 
   | Type.Var { contents = None } ->
-    failwith "wt_of_t Var(ref(None))"
+    failwith "wt_of_t"
 
   | Type.Var { contents = Some t } ->
     wt_of_t env t
@@ -342,7 +342,7 @@ let rec g oc env fvs = function
           (smit_var env fvs x)
 
       | _ ->
-        failwith "Get: first argument is not Array."
+        failwith "Get"
     end
 
   | Put(x, y, z) ->
@@ -365,7 +365,7 @@ let rec g oc env fvs = function
           (smit_var env fvs z)
 
       | _ ->
-        failwith "Put: first argument is not Array."
+        failwith "Put"
     end
 
   | ExtArray Id.Label x ->
@@ -476,7 +476,7 @@ let emit_types oc sigs =
         emit oc "))\n\n"
 
       | _ ->
-        failwith "emit_types"
+        failwith "emit_types")
     (TM.bindings sigs)
 
 
@@ -502,7 +502,7 @@ let emit_fundefs oc fundefs =
         emit oc ")\n\n"
 
       | _ ->
-        failwith "emit_fundef"
+        failwith "emit_fundef")
     fundefs
 
 
