@@ -477,7 +477,7 @@ let emit_types oc sigs =
     (TM.bindings sigs)
 
 
-let emit_fundef oc = function
+let emit_func oc = function
   | { name = (Id.Label n, Type.Fun(_, t)) ; args ; formal_fv ; body } ->
     let fvindex formal_fv =
       let _, ts = sep_pairs formal_fv in
@@ -497,15 +497,15 @@ let emit_fundef oc = function
     emit oc ")\n\n"
 
   | _ ->
-    failwith "emit_fundef"
+    failwith "emit_func"
 
 
-let emit_fundefs oc fundefs =
-  List.iter (emit_fundef oc) fundefs
+let emit_funcs oc fundefs =
+  List.iter (emit_func oc) fundefs
 
 
 let emit_start oc start =
-  emit_fundef oc
+  emit_func oc
     { name = (Id.Label "$start", Type.Fun([], Type.Unit))
     ; args = [] ; formal_fv = [] ; body = start } ;
   emit oc "(start $$start)"
@@ -522,6 +522,6 @@ let emitcode oc (Prog(fundefs, start)) =
   emit_globals oc ;
   emit_table oc fundefs ;
   emit_types oc !funtyindex ;
-  emit_fundefs oc fundefs ;
+  emit_funcs oc fundefs ;
   emit_start oc start ;
   emit oc ")"
