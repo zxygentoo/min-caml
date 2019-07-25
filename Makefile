@@ -1,5 +1,5 @@
 TESTSDIR = tests
-BUILDDIR = _build/default
+BUILDDIR = _build/default/src
 
 SOURCES = ack.ml adder.ml cls-bug2.ml cls-bug.ml cls-rec.ml cls-reg-bug.ml \
 even-odd.ml fib.ml funcomp.ml gcd.ml inprod-loop.ml inprod.ml inprod-rec.ml \
@@ -19,7 +19,7 @@ all : mincaml
 	cp $(BUILDDIR)/main.exe mincaml
 
 mincaml :
-	dune build main.exe
+	dune build src/main.exe
 
 test : clean mincaml $(DIFFS)
 
