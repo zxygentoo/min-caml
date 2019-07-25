@@ -477,30 +477,31 @@ let emit_types oc sigs =
     (TM.bindings sigs)
 
 
-let emit_fundefs oc fundefs =
-  let fvindex formal_fv =
-    let _, ts = sep_pairs formal_fv in
-    let os = fold_sums size_of_t ts in
-    (List.map2 (fun (id, t) o -> id, (t, o)) formal_fv os)
-  in
-  List.iter
-    (function
-      | { name = (Id.Label n, Type.Fun(_, t)) ; args ; formal_fv ; body } ->
-        emit oc "(func $%s" n ;
-        List.iter (emit_label_param oc) args ;
-        emit_result oc t ;
-        emit oc "\n" ;
-        emit_locals oc body ;
-        (
-          let env = M.add_list (args @ formal_fv) M.empty in
-          let fvs = M.add_list (fvindex formal_fv) M.empty in
-          g oc env fvs body
-        ) ;
-        emit oc ")\n\n"
+let emit_fundef oc = function
+  | { name = (Id.Label n, Type.Fun(_, t)) ; args ; formal_fv ; body } ->
+    let fvindex formal_fv =
+      let _, ts = sep_pairs formal_fv in
+      let os = fold_sums size_of_t ts in
+      (List.map2 (fun (id, t) o -> id, (t, o)) formal_fv os)
+    in
+    emit oc "(func $%s" n ;
+    List.iter (emit_label_param oc) args ;
+    emit_result oc t ;
+    emit oc "\n" ;
+    emit_locals oc body ;
+    (
+      let env = M.add_list (args @ formal_fv) M.empty in
+      let fvs = M.add_list (fvindex formal_fv) M.empty in
+      g oc env fvs body
+    ) ;
+    emit oc ")\n\n"
 
-      | _ ->
-        failwith "emit_fundef")
-    fundefs
+  | _ ->
+    failwith "emit_fundef"
+
+
+let emit_fundefs oc fundefs =
+  List.iter (emit_fundef oc) fundefs
 
 
 let emit_start oc start =
