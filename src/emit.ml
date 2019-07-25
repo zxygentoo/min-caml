@@ -159,7 +159,7 @@ let emit_make_array oc env fvs = function
       (smit_var env fvs n)
 
   | _ ->
-    raise (Invalid_argument "emit_make_array")
+    failwith "emit_make_array"
 
 
 let rec g oc env fvs = function
@@ -476,7 +476,7 @@ let emit_types oc sigs =
         emit oc "))\n\n"
 
       | _ ->
-        raise (Invalid_argument "emit_funtype"))
+        failwith "emit_types"
     (TM.bindings sigs)
 
 
@@ -502,7 +502,7 @@ let emit_fundefs oc fundefs =
         emit oc ")\n\n"
 
       | _ ->
-        raise (Invalid_argument "emit_fundef"))
+        failwith "emit_fundef"
     fundefs
 
 
