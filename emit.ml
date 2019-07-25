@@ -101,14 +101,14 @@ let smit_var env fvs id =
     begin
       match M.find id fvs with
       | Type.Unit, _ -> ""
-      | t, o -> smit "(%s.load (i32.add (i32.const %i) (get_global $CL)))\n"
+      | t, o -> smit "(%s.load (i32.add (i32.const %i) (global.get $CL)))\n"
                   (wt_of_t env t) o
     end
   else
     (* locals *)
     begin match M.find id env with
       | Type.Unit -> ""
-      | _ -> smit "(get_local $%s)\n" id
+      | _ -> smit "(local.get $%s)\n" id
     end
 
 
@@ -126,15 +126,15 @@ let emit_var oc env fvs id =
 let emit_make_array oc env fvs = function
   | AppDir(Id.Label "min_caml_make_array", [n; a]) ->
     emit oc
-      "(set_global $GA (i32.const 0))\n\
+      "(global.set $GA (i32.const 0))\n\
        (block\n\
        (loop\n\
-       (br_if 1 (i32.eq (get_global $GA) %s))\n\
-       (i32.store\n(get_global $HP) %s)\n\
-       (set_global $HP (i32.add (i32.const 4) (get_global $HP)))\n\
-       (set_global $GA (i32.add (get_global $GA) (i32.const 1)))\n\
+       (br_if 1 (i32.eq (global.get $GA) %s))\n\
+       (i32.store\n(global.get $HP) %s)\n\
+       (global.set $HP (i32.add (i32.const 4) (global.get $HP)))\n\
+       (global.set $GA (i32.add (global.get $GA) (i32.const 1)))\n\
        (br 0)))\n\
-       (i32.sub (get_global $HP) (i32.shl %s (i32.const 2)))\n"
+       (i32.sub (global.get $HP) (i32.shl %s (i32.const 2)))\n"
       (smit_var env fvs n)
       (if M.mem a !funindex then
          (* immediate function array *)
@@ -145,15 +145,15 @@ let emit_make_array oc env fvs = function
 
   | AppDir(Id.Label "min_caml_make_float_array", [n; a]) ->
     emit oc
-      "(set_global $GA (i32.const 0))\n\
+      "(global.set $GA (i32.const 0))\n\
        (block\n\
        (loop\n\
-       (br_if 1 (i32.eq (get_global $GA) %s))\n\
-       (f64.store\n(get_global $HP) %s)\n\
-       (set_global $HP (i32.add (i32.const 8) (get_global $HP)))\n\
-       (set_global $GA (i32.add (get_global $GA) (i32.const 1)))\n\
+       (br_if 1 (i32.eq (global.get $GA) %s))\n\
+       (f64.store\n(global.get $HP) %s)\n\
+       (global.set $HP (i32.add (i32.const 8) (global.get $HP)))\n\
+       (global.set $GA (i32.add (global.get $GA) (i32.const 1)))\n\
        (br 0)))\n\
-       (i32.sub (get_global $HP) (i32.shl %s (i32.const 3)))\n"
+       (i32.sub (global.get $HP) (i32.shl %s (i32.const 3)))\n"
       (smit_var env fvs n)
       (smit_var env fvs a)
       (smit_var env fvs n)
@@ -238,16 +238,16 @@ let rec g oc env fvs = function
     let total_size = (List.fold_left (+) 4 ss) in
     emit oc
       "(; get HP ;)\n\
-       (set_local $%s (get_global $HP))\n\
+       (set_local $%s (global.get $HP))\n\
        (; allocate memory ;)\n\
-       (set_global $HP (i32.add (i32.const %i) (get_global $HP)))\n\
+       (global.set $HP (i32.add (i32.const %i) (global.get $HP)))\n\
        (; store func pointer ;)\n\
-       (i32.store (get_local $%s) (i32.const %i))\n\
+       (i32.store (local.get $%s) (i32.const %i))\n\
        (; fvs ;)\n"
       id total_size id (M.find fname !funindex).idx ;
     List.iter2
       (fun fv o ->
-         emit oc "(i32.store (i32.add (i32.const %i) (get_local $%s)) %s)\n"
+         emit oc "(i32.store (i32.add (i32.const %i) (local.get $%s)) %s)\n"
            o id (smit_var env fvs fv))
       actual_fv 
       os ;
@@ -256,16 +256,16 @@ let rec g oc env fvs = function
   | AppCls(id, args) when M.mem id env ->
     emit oc
       "(; backup CL ;)\n\
-       (set_local $$cl_bak (get_global $CL))\n\
+       (set_local $$cl_bak (global.get $CL))\n\
        (; register cls address to CL ;)\n\
-       (set_global $CL %s)\n\
+       (global.set $CL %s)\n\
        (call_indirect (type %s)\n\
        (; bvs ;)\n\
        %s\n\
        (; func pointer ;)\n\
-       (i32.load (get_global $CL)))\n\
+       (i32.load (global.get $CL)))\n\
        (; restore CL ;)\n\
-       (set_global $CL (get_local $$cl_bak))\n"
+       (global.set $CL (local.get $$cl_bak))\n"
       (smit_var env fvs id)
       (TM.find (M.find id env) !funtyindex)
       (smit_vars env fvs args)
@@ -302,16 +302,16 @@ let rec g oc env fvs = function
     let total_size = List.fold_left (+) 0 ss in
     let os = shift_left_hd (fold_sums (fun x -> x) ss) in
     emit oc
-      "(set_global $GA (get_global $HP))\n\
-       (set_global $HP (i32.add (i32.const %i) (get_global $HP)))\n"
+      "(global.set $GA (global.get $HP))\n\
+       (global.set $HP (i32.add (i32.const %i) (global.get $HP)))\n"
       total_size ;
     List.iter2
       (fun x (t, o) ->
-         emit oc "(%s.store (i32.add (get_global $GA) (i32.const %i)) %s)\n"
+         emit oc "(%s.store (i32.add (global.get $GA) (i32.const %i)) %s)\n"
            (wt_of_t env t) o (smit_var env fvs x))
       xs
       (List.map2 (fun t o -> (t, o)) ts os) ;
-    emit oc "(get_global $GA)\n"
+    emit oc "(global.get $GA)\n"
 
   | LetTuple(xts, y, e) ->
     let _, ts = sep_pairs xts in
@@ -369,7 +369,7 @@ let rec g oc env fvs = function
     end
 
   | ExtArray Id.Label x ->
-    emit oc "(get_global $min_caml_%s)" x
+    emit oc "(global.get $min_caml_%s)" x
 
 
 (* function index building *)
