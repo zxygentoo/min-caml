@@ -1,6 +1,6 @@
 # min-caml-wasm
 
-A [min-caml](https://github.com/esumii/min-caml) compiler port targeting [WebAssembly](https://webassembly.org).
+A port of the [min-caml](https://github.com/esumii/min-caml) compiler targeting [WebAssembly](https://webassembly.org).
 
 ## Dependencies
 
