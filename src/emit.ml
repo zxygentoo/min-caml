@@ -72,6 +72,12 @@ let rec wt_of_t env = function
   | Type.Var { contents = None } -> failwith "wt_of_t"
 
 
+(* inc HP shortcut *)
+
+let smit_inc_hp i =
+  smit "(global.set $HP (i32.add (i32.const %i) (global.get $HP)))\n" i
+
+
 (* emit var *)
 
 let smit_var env fvs id =
@@ -107,7 +113,7 @@ let emit_make_array oc env fvs = function
        (loop\n\
        (br_if 1 (i32.eq (global.get $GA) %s))\n\
        (i32.store\n(global.get $HP) %s)\n\
-       (global.set $HP (i32.add (i32.const 4) (global.get $HP)))\n\
+       %s\n\
        (global.set $GA (i32.add (global.get $GA) (i32.const 1)))\n\
        (br 0)))\n\
        (global.get $GB)\n"
@@ -117,6 +123,7 @@ let emit_make_array oc env fvs = function
          smit "(i32.const %i)" (M.find a !funindex).idx
        else
          smit_var env fvs a)
+      (smit_inc_hp 4)
 
   | AppDir(Id.Label "min_caml_make_float_array", [n; a]) ->
     emit oc
@@ -126,12 +133,13 @@ let emit_make_array oc env fvs = function
        (loop\n\
        (br_if 1 (i32.eq (global.get $GA) %s))\n\
        (f64.store\n(global.get $HP) %s)\n\
-       (global.set $HP (i32.add (i32.const 8) (global.get $HP)))\n\
+       %s
        (global.set $GA (i32.add (global.get $GA) (i32.const 1)))\n\
        (br 0)))\n\
        (global.get $GB)\n"
       (smit_var env fvs n)
       (smit_var env fvs a)
+      (smit_inc_hp 8)
 
   | _ ->
     failwith "emit_make_array"
@@ -216,14 +224,11 @@ let rec g oc env fvs = function
     let os = fold_sums (fun x -> x) ss in
     let total_size = (List.fold_left (+) 4 ss) in
     emit oc
-      "(; get HP ;)\n\
-       (set_local $%s (global.get $HP))\n\
-       (; allocate memory ;)\n\
-       (global.set $HP (i32.add (i32.const %i) (global.get $HP)))\n\
-       (; store func pointer ;)\n\
-       (i32.store (local.get $%s) (i32.const %i))\n\
+      "(; get HP ;)\n(set_local $%s (global.get $HP))\n\
+       (; malloc ;)\n%s\
+       (; store fnptr ;)\n(i32.store (local.get $%s) (i32.const %i))\n\
        (; fvs ;)\n"
-      id total_size id (M.find fname !funindex).idx ;
+      id (smit_inc_hp total_size) id (M.find fname !funindex).idx ;
     List.iter2
       (fun fv o ->
          emit oc "(i32.store (i32.add (i32.const %i) (local.get $%s)) %s)\n"
@@ -234,17 +239,12 @@ let rec g oc env fvs = function
 
   | AppCls(id, args) when M.mem id env ->
     emit oc
-      "(; backup CL ;)\n\
-       (set_local $$cl_bak (global.get $CL))\n\
-       (; register cls address to CL ;)\n\
-       (global.set $CL %s)\n\
+      "(; backup CL ;)\n(set_local $$cl_bak (global.get $CL))\n\
+       (; register cls to CL ;)\n(global.set $CL %s)\n\
        (call_indirect (type %s)\n\
-       (; bvs ;)\n\
-       %s\n\
-       (; func pointer ;)\n\
-       (i32.load (global.get $CL)))\n\
-       (; restore CL ;)\n\
-       (global.set $CL (local.get $$cl_bak))\n"
+       (; bvs ;)\n%s\n\
+       (; fnptr ;)\n(i32.load (global.get $CL)))\n\
+       (; restore CL ;)\n(global.set $CL (local.get $$cl_bak))\n"
       (smit_var env fvs id)
       (TM.find (M.find id env) !funtyindex)
       (smit_vars env fvs args)
@@ -256,10 +256,8 @@ let rec g oc env fvs = function
     let info = (M.find id !funindex) in
     emit oc 
       "(call_indirect (type %s)\n\
-       (; bvs ;)\n\
-       %s\
-       (; func pointer ;)\n\
-       (i32.const %i))\n"
+       (; bvs ;)\n%s\
+       (; fnptr ;)\n(i32.const %i))\n"
       info.ty_idx
       (smit_vars env fvs args)
       info.idx
@@ -280,10 +278,7 @@ let rec g oc env fvs = function
     let ss = List.map size_of_t ts in
     let total_size = List.fold_left (+) 0 ss in
     let os = hd_based (fold_sums (fun x -> x) ss) in
-    emit oc
-      "(global.set $GA (global.get $HP))\n\
-       (global.set $HP (i32.add (i32.const %i) (global.get $HP)))\n"
-      total_size ;
+    emit oc "(global.set $GA (global.get $HP))\n%s" (smit_inc_hp total_size) ;
     List.iter2
       (fun x (t, o) ->
          emit oc "(%s.store (i32.add (global.get $GA) (i32.const %i)) %s)\n"
@@ -448,12 +443,10 @@ let emit_memory oc =
 
 
 let emit_globals oc =
-  (* heap pointer *)
-  emit oc "(global $HP (mut i32) (i32.const 0))\n" ;
-  (* closure pointer *)
-  emit oc "(global $CL (mut i32) (i32.const 0))\n" ;
-  (* generic 32-bit registers *)
-  emit oc "(global $GA (mut i32) (i32.const 0))\n\
+  (* heap pointer, closure pointer and two generic 32-bit registers *)
+  emit oc "(global $HP (mut i32) (i32.const 0))\n\
+           (global $CL (mut i32) (i32.const 0))\n\
+           (global $GA (mut i32) (i32.const 0))\n\
            (global $GB (mut i32) (i32.const 0))\n\n"
 
 
