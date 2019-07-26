@@ -20,13 +20,12 @@ const core = {
 
 
 const run_wat = (filename) => {
-    const mod = wabt.parseWat(filename, fs.readFileSync(filename).toString());
-
     return WebAssembly.instantiate(
-        mod.toBinary({ write_debug_names: true }).buffer, core
-    ).then(
-        // do nothing
-    ).catch(e => {
+        wabt.parseWat(filename, fs.readFileSync(filename).toString()
+        ).toBinary({ write_debug_names: true }
+        ).buffer,
+        core
+    ).then().catch(e => {
         console.log(e);
     });
 };
