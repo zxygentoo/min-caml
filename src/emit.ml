@@ -10,7 +10,7 @@ module TM = Map.Make(T_)
 module TS = Set.Make(T_)
 
 
-(* holding various information about fundef *)
+(* holding various information about functions *)
 type fun_info =
   { id : Id.t
   ; ty : Type.t
@@ -19,12 +19,14 @@ type fun_info =
   ; fn : Closure.fundef
   }
 
-(* fun_info lookup by name *)
+(* function information lookup by name *)
 let funindex = ref M.empty
 
-(* fun_info lookup by typ *)
+(* function type index lookup by type *)
 let funtyindex = ref TM.empty
 
+
+(* general helpers *)
 
 let emit = Printf.fprintf
 let smit = Printf.sprintf
@@ -46,27 +48,11 @@ let fold_sums f xs =
   fold_sums' 0 xs
 
 
-let shift_left_hd xs =
+let hd_based xs =
   0 :: (xs |> List.rev |> List.tl |> List.rev)
 
 
-let rec local_vars = function
-  | Let(xt, e1, e2) ->
-    xt :: local_vars e1 @ local_vars e2
-
-  | MakeCls(xt, _, e) ->
-    xt :: local_vars e
-
-  | IfEq(_, _, e1, e2, _)
-  | IfLE(_, _, e1, e2, _) ->
-    local_vars e1 @ local_vars e2
-
-  | LetTuple(xts, _, e) ->
-    xts @ local_vars e
-
-  | _ ->
-    []
-
+(* types and sizes *)
 
 let size_of_t = function
   | Type.Unit -> 0
@@ -75,25 +61,18 @@ let size_of_t = function
 
 
 let rec wt_of_t env = function
-  | Type.Unit ->
-    ""
-
-  | Type.Float ->
-    "f64"
-
+  | Type.Unit -> ""
+  | Type.Float -> "f64"
   | Type.Int
   | Type.Bool
   | Type.Fun _
   | Type.Tuple _
-  | Type.Array _ ->
-    "i32"
+  | Type.Array _ -> "i32"
+  | Type.Var { contents = Some t } -> wt_of_t env t
+  | Type.Var { contents = None } -> failwith "wt_of_t"
 
-  | Type.Var { contents = None } ->
-    failwith "wt_of_t Var(ref(None))"
 
-  | Type.Var { contents = Some t } ->
-    wt_of_t env t
-
+(* emit var *)
 
 let smit_var env fvs id =
   if M.mem id fvs then
@@ -116,17 +95,14 @@ let smit_vars env fvs args =
   Id.pp_list_sep "" (List.map (smit_var env fvs) args)
 
 
-let emit_var oc env fvs id =
-  emit oc "%s" (smit_var env fvs id)
-
-
-(* currently nodejs doesn't support WebAssembly.Global API,
+(* Currently NodeJS doesn't support WebAssembly.Global API,
    so these array making functions will be quite annoying to write as
-   JavaScript externals, so we just do it within WebAssembly (for now). *)
+   JavaScript externals, for now we just do it in WebAssembly. *)
 let emit_make_array oc env fvs = function
   | AppDir(Id.Label "min_caml_make_array", [n; a]) ->
     emit oc
       "(global.set $GA (i32.const 0))\n\
+       (global.set $GB (global.get $HP))\n\
        (block\n\
        (loop\n\
        (br_if 1 (i32.eq (global.get $GA) %s))\n\
@@ -134,18 +110,18 @@ let emit_make_array oc env fvs = function
        (global.set $HP (i32.add (i32.const 4) (global.get $HP)))\n\
        (global.set $GA (i32.add (global.get $GA) (i32.const 1)))\n\
        (br 0)))\n\
-       (i32.sub (global.get $HP) (i32.shl %s (i32.const 2)))\n"
+       (global.get $GB)\n"
       (smit_var env fvs n)
       (if M.mem a !funindex then
          (* immediate function array *)
          smit "(i32.const %i)" (M.find a !funindex).idx
        else
          smit_var env fvs a)
-      (smit_var env fvs n)
 
   | AppDir(Id.Label "min_caml_make_float_array", [n; a]) ->
     emit oc
       "(global.set $GA (i32.const 0))\n\
+       (global.set $GB (global.get $HP))\n\
        (block\n\
        (loop\n\
        (br_if 1 (i32.eq (global.get $GA) %s))\n\
@@ -153,14 +129,15 @@ let emit_make_array oc env fvs = function
        (global.set $HP (i32.add (i32.const 8) (global.get $HP)))\n\
        (global.set $GA (i32.add (global.get $GA) (i32.const 1)))\n\
        (br 0)))\n\
-       (i32.sub (global.get $HP) (i32.shl %s (i32.const 3)))\n"
+       (global.get $GB)\n"
       (smit_var env fvs n)
       (smit_var env fvs a)
-      (smit_var env fvs n)
 
   | _ ->
-    raise (Invalid_argument "emit_make_array")
+    failwith "emit_make_array"
 
+
+(* emit expression *)
 
 let rec g oc env fvs = function
   | Unit ->
@@ -225,11 +202,13 @@ let rec g oc env fvs = function
     g oc (M.add id Type.Unit env) fvs e2
 
   | Let((id, t), e1, e2) ->
-    emit oc "(set_local $%s " id ; g oc env fvs e1 ; emit oc ")\n" ;
+    emit oc "(set_local $%s " id ;
+    g oc env fvs e1 ;
+    emit oc ")\n" ;
     g oc (M.add id t env) fvs e2
 
   | Var id ->
-    emit_var oc env fvs id
+    emit oc "%s" (smit_var env fvs id)
 
   | MakeCls((id, t), { entry = Id.Label fname ; actual_fv }, e) ->
     let ts = List.map (fun x -> M.find x env) actual_fv in
@@ -271,9 +250,9 @@ let rec g oc env fvs = function
       (smit_vars env fvs args)
 
   | AppCls(id, args) ->
-    (* for indirect recursive self-calls,
+    (* For indirect recursive self-calls,
        no need to actually make the closre (and backup/restore $CL),
-       because 'someone' must have done it. *)
+       because someone must have done it. *)
     let info = (M.find id !funindex) in
     emit oc 
       "(call_indirect (type %s)\n\
@@ -300,7 +279,7 @@ let rec g oc env fvs = function
     let ts = List.map (fun x -> M.find x env) xs in
     let ss = List.map size_of_t ts in
     let total_size = List.fold_left (+) 0 ss in
-    let os = shift_left_hd (fold_sums (fun x -> x) ss) in
+    let os = hd_based (fold_sums (fun x -> x) ss) in
     emit oc
       "(global.set $GA (global.get $HP))\n\
        (global.set $HP (i32.add (i32.const %i) (global.get $HP)))\n"
@@ -315,7 +294,7 @@ let rec g oc env fvs = function
 
   | LetTuple(xts, y, e) ->
     let _, ts = sep_pairs xts in
-    let os = shift_left_hd (fold_sums size_of_t ts) in
+    let os = hd_based (fold_sums size_of_t ts) in
     List.iter2
       (fun (x, t) o ->
          emit oc "(set_local $%s (%s.load (i32.add (i32.const %i) %s)))\n"
@@ -342,7 +321,7 @@ let rec g oc env fvs = function
           (smit_var env fvs x)
 
       | _ ->
-        failwith "Get: first argument is not Array."
+        failwith "Get"
     end
 
   | Put(x, y, z) ->
@@ -365,11 +344,11 @@ let rec g oc env fvs = function
           (smit_var env fvs z)
 
       | _ ->
-        failwith "Put: first argument is not Array."
+        failwith "Put"
     end
 
-  | ExtArray Id.Label x ->
-    emit oc "(global.get $min_caml_%s)" x
+  | ExtArray Id.Label label ->
+    emit oc "(global.get $min_caml_%s)" label
 
 
 (* function index building *)
@@ -397,21 +376,6 @@ let funinfo_index fun_infos =
 
 (* emit helpers *)
 
-let emit_local oc = function
-  | _, Type.Unit -> ()
-  | name, t -> emit oc "(local $%s %s)\n" name (wt_of_t M.empty t)
-
-
-let emit_locals oc e =
-  List.iter (emit_local oc) (local_vars e) ;
-  (* additional CL backup,
-     we can eliminate this when `e` doesn't contain MakeCLS,
-     but the additional check just seems not worth it,
-     and in a real production system, 
-     you will most certainly have a backend optimization for that anyway. *)
-  emit oc "(local $$cl_bak i32)\n"
-
-
 let emit_label_param oc = function
   | _, Type.Unit -> ()
   | label, t -> emit oc " (param $%s %s)" label (wt_of_t M.empty t)
@@ -425,6 +389,39 @@ let emit_param oc = function
 let emit_result oc = function
   | Type.Unit -> ()
   | _ as t -> emit oc " (result %s)" (wt_of_t M.empty t)
+
+
+let rec gather_locals = function
+  | Let(xt, e1, e2) ->
+    xt :: gather_locals e1 @ gather_locals e2
+
+  | MakeCls(xt, _, e) ->
+    xt :: gather_locals e
+
+  | IfEq(_, _, e1, e2, _)
+  | IfLE(_, _, e1, e2, _) ->
+    gather_locals e1 @ gather_locals e2
+
+  | LetTuple(xts, _, e) ->
+    xts @ gather_locals e
+
+  | _ ->
+    []
+
+
+let emit_local oc = function
+  | _, Type.Unit -> ()
+  | name, t -> emit oc "(local $%s %s)\n" name (wt_of_t M.empty t)
+
+
+let emit_locals oc e =
+  List.iter (emit_local oc) (gather_locals e) ;
+  (* additional CL backup,
+     we can eliminate this when `e` doesn't contain MakeCLS,
+     but the additional check just seems not worth it,
+     and in a real production system, 
+     you will most certainly have a backend optimization for that anyway. *)
+  emit oc "(local $$cl_bak i32)\n"
 
 
 (* emit module sections *)
@@ -455,8 +452,9 @@ let emit_globals oc =
   emit oc "(global $HP (mut i32) (i32.const 0))\n" ;
   (* closure pointer *)
   emit oc "(global $CL (mut i32) (i32.const 0))\n" ;
-  (* generic 32-bit register, currently only used for looping *)
-  emit oc "(global $GA (mut i32) (i32.const 0))\n\n"
+  (* generic 32-bit registers *)
+  emit oc "(global $GA (mut i32) (i32.const 0))\n\
+           (global $GB (mut i32) (i32.const 0))\n\n"
 
 
 let emit_table oc fds =
@@ -476,42 +474,42 @@ let emit_types oc sigs =
         emit oc "))\n\n"
 
       | _ ->
-        raise (Invalid_argument "emit_funtype"))
+        failwith "emit_types")
     (TM.bindings sigs)
 
 
-let emit_fundefs oc fundefs =
-  let fvindex formal_fv =
-    let _, ts = sep_pairs formal_fv in
-    let os = fold_sums size_of_t ts in
-    (List.map2 (fun (id, t) o -> id, (t, o)) formal_fv os)
-  in
-  List.iter
-    (function
-      | { name = (Id.Label n, Type.Fun(_, t)) ; args ; formal_fv ; body } ->
-        emit oc "(func $%s" n ;
-        List.iter (emit_label_param oc) args ;
-        emit_result oc t ;
-        emit oc "\n" ;
-        emit_locals oc body ;
-        (
-          let env = M.add_list (args @ formal_fv) M.empty in
-          let fvs = M.add_list (fvindex formal_fv) M.empty in
-          g oc env fvs body
-        ) ;
-        emit oc ")\n\n"
+let emit_func oc = function
+  | { name = (Id.Label n, Type.Fun(_, t)) ; args ; formal_fv ; body } ->
+    let fvindex formal_fv =
+      let _, ts = sep_pairs formal_fv in
+      let os = fold_sums size_of_t ts in
+      (List.map2 (fun (id, t) o -> id, (t, o)) formal_fv os)
+    in
+    emit oc "(func $%s" n ;
+    List.iter (emit_label_param oc) args ;
+    emit_result oc t ;
+    emit oc "\n" ;
+    emit_locals oc body ;
+    (
+      let env = M.add_list (args @ formal_fv) M.empty in
+      let fvs = M.add_list (fvindex formal_fv) M.empty in
+      g oc env fvs body
+    ) ;
+    emit oc ")\n\n"
 
-      | _ ->
-        raise (Invalid_argument "emit_fundef"))
-    fundefs
+  | _ ->
+    failwith "emit_func"
+
+
+let emit_funcs oc fundefs =
+  List.iter (emit_func oc) fundefs
 
 
 let emit_start oc start =
-  emit_fundefs oc [
-    { name = (Id.Label "start", Type.Fun([], Type.Unit))
-    ; args = [] ; formal_fv = [] ; body = start }
-  ] ;
-  emit oc "(export \"start\" (func $start))"
+  emit_func oc
+    { name = (Id.Label "$start", Type.Fun([], Type.Unit))
+    ; args = [] ; formal_fv = [] ; body = start } ;
+  emit oc "(start $$start)"
 
 
 (* emit module *)
@@ -525,6 +523,6 @@ let emitcode oc (Prog(fundefs, start)) =
   emit_globals oc ;
   emit_table oc fundefs ;
   emit_types oc !funtyindex ;
-  emit_fundefs oc fundefs ;
+  emit_funcs oc fundefs ;
   emit_start oc start ;
   emit oc ")"
