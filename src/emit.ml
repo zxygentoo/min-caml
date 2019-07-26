@@ -501,9 +501,8 @@ let emit_funcs oc fundefs =
 
 
 let emit_start oc start =
-  emit_func oc
-    { name = (Id.Label "$start", Type.Fun([], Type.Unit))
-    ; args = [] ; formal_fv = [] ; body = start } ;
+  emit_func oc { name = (Id.Label "$start", Type.Fun([], Type.Unit))
+               ; args = [] ; formal_fv = [] ; body = start } ;
   emit oc "(start $$start)"
 
 
