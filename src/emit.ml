@@ -16,7 +16,6 @@ type fun_info =
   ; ty : Type.t
   ; idx : int
   ; ty_idx : string
-  ; fn : Closure.fundef
   }
 
 (* function information lookup by name *)
@@ -360,13 +359,13 @@ let funsig_index fundefs =
 
 let infos_of_fundefs fundefs sigs =
   List.mapi
-    (fun i ({ name = (Id.Label n, t) ; _ } as fundef) ->
-       { id = n ; ty = t ; idx = i ; ty_idx = TM.find t sigs ; fn = fundef })
+    (fun i { name = (Id.Label n, t) ; _ } ->
+       { id = n ; ty = t ; idx = i ; ty_idx = TM.find t sigs })
     fundefs
 
 
-let funinfo_index fun_infos =
-  M.add_list (List.map (fun e -> e.id, e) fun_infos) M.empty
+let funinfo_index infos =
+  M.add_list (List.map (fun e -> e.id, e) infos) M.empty
 
 
 (* emit helpers *)

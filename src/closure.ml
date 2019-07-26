@@ -30,7 +30,7 @@ type t =
   | Get of Id.t * Id.t
   | Put of Id.t * Id.t * Id.t
   | ExtArray of Id.label
-(* [@@deriving show] *)
+  (* [@@deriving show] *)
 
 type fundef =
   { name : Id.label * Type.t
