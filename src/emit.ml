@@ -354,7 +354,7 @@ let funsig_index fundefs =
     TM.empty
     (fundefs
      |> List.map (fun { name = (_, t) ; _ } -> t)
-     |> TS.of_list |> TS.to_seq |> List.of_seq
+     |> TS.of_list |> TS.elements
      |> List.mapi (fun i t -> t, "$" ^ string_of_int i))
 
 
