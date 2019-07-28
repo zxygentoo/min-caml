@@ -224,10 +224,10 @@ let rec g oc env fvs = function
     let os = fold_sums (fun x -> x) ss in
     let total_size = (List.fold_left (+) 4 ss) in
     emit oc
-      "(; get HP ;)\n(set_local $%s (global.get $HP))\n\
-       (; malloc ;)\n%s\
-       (; store fnptr ;)\n(i32.store (local.get $%s) (i32.const %i))\n\
-       (; fvs ;)\n"
+      ";; get HP\n(set_local $%s (global.get $HP))\n\
+       ;; malloc\n%s\
+       ;; store fnptr\n(i32.store (local.get $%s) (i32.const %i))\n\
+       ;; fvs\n"
       id (smit_inc_hp total_size) id (M.find fname !funindex).idx ;
     List.iter2
       (fun fv o ->
@@ -239,12 +239,12 @@ let rec g oc env fvs = function
 
   | AppCls(id, args) when M.mem id env ->
     emit oc
-      "(; backup CL ;)\n(set_local $$cl_bak (global.get $CL))\n\
-       (; register cls to CL ;)\n(global.set $CL %s)\n\
+      ";; backup CL\n(set_local $$cl_bak (global.get $CL))\n\
+       ;; register cls to CL\n(global.set $CL %s)\n\
        (call_indirect (type %s)\n\
-       (; bvs ;)\n%s\n\
-       (; fnptr ;)\n(i32.load (global.get $CL)))\n\
-       (; restore CL ;)\n(global.set $CL (local.get $$cl_bak))\n"
+       ;; bvs\n%s\n\
+       ;; fnptr\n(i32.load (global.get $CL)))\n\
+       ;; restore CL\n(global.set $CL (local.get $$cl_bak))\n"
       (smit_var env fvs id)
       (TM.find (M.find id env) !funtyindex)
       (smit_vars env fvs args)
@@ -256,8 +256,8 @@ let rec g oc env fvs = function
     let info = (M.find id !funindex) in
     emit oc 
       "(call_indirect (type %s)\n\
-       (; bvs ;)\n%s\
-       (; fnptr ;)\n(i32.const %i))\n"
+       ;; bvs\n%s\
+       ;; fnptr\n(i32.const %i))\n"
       info.ty_idx
       (smit_vars env fvs args)
       info.idx
@@ -443,11 +443,9 @@ let emit_memory oc =
 
 
 let emit_globals oc =
-  emit oc "(; heap pointer ;)\n\
-           (global $HP (mut i32) (i32.const 0))\n\
-           (; closure pointer ;)\n
-           (global $CL (mut i32) (i32.const 0))\n\
-           (; 32-bit generic registers ;)\n
+  emit oc ";; heap pointer\n\(global $HP (mut i32) (i32.const 0))\n\
+           ;; closure pointer\n(global $CL (mut i32) (i32.const 0))\n\
+           ;; 32-bit generic registers\n
            (global $GA (mut i32) (i32.const 0))\n\
            (global $GB (mut i32) (i32.const 0))\n\n"
 
