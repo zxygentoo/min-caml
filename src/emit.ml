@@ -445,7 +445,7 @@ let emit_memory oc =
 let emit_globals oc =
   emit oc ";; heap pointer\n\(global $HP (mut i32) (i32.const 0))\n\
            ;; closure pointer\n(global $CL (mut i32) (i32.const 0))\n\
-           ;; 32-bit generic registers\n
+           ;; 32-bit generic registers\n\
            (global $GA (mut i32) (i32.const 0))\n\
            (global $GB (mut i32) (i32.const 0))\n\n"
 
