@@ -12,12 +12,11 @@ module TS = Set.Make(T_)
 
 (* holding various information about functions *)
 type fun_info =
-  { id : Id.t
-  ; ty : Type.t
+  { ty : Type.t
   ; idx : int
   ; ty_idx : string
-  ; fn : Closure.fundef
   }
+
 
 (* function information lookup by name *)
 let funindex = ref M.empty
@@ -358,15 +357,13 @@ let funsig_index fundefs =
      |> List.mapi (fun i t -> t, "$" ^ string_of_int i))
 
 
-let infos_of_fundefs fundefs sigs =
-  List.mapi
-    (fun i ({ name = (Id.Label n, t) ; _ } as fundef) ->
-       { id = n ; ty = t ; idx = i ; ty_idx = TM.find t sigs ; fn = fundef })
-    fundefs
-
-
-let funinfo_index fun_infos =
-  M.add_list (List.map (fun e -> e.id, e) fun_infos) M.empty
+let funinfo_index fundefs sigs =
+  M.add_list
+    (List.mapi
+      (fun i { name = (Id.Label n, t) ; _ } ->
+        n, { ty = t ; idx = i ; ty_idx = TM.find t sigs })
+      fundefs)
+    M.empty
 
 
 (* emit helpers *)
@@ -508,7 +505,7 @@ let emit_start oc start =
 
 let emitcode oc (Prog(fundefs, start)) =
   funtyindex := funsig_index fundefs ;
-  funindex := funinfo_index (infos_of_fundefs fundefs !funtyindex) ;
+  funindex := funinfo_index fundefs !funtyindex ;
   emit oc "(module\n" ;
   emit_imports oc ;
   emit_memory oc ;
