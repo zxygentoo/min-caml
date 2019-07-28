@@ -464,7 +464,7 @@ let emit_types oc sigs =
 
 
 let emit_func oc = function
-  | { name = (Id.Label n, Type.Fun(_, t)) ; args ; formal_fv ; body } ->
+  | { name = Id.Label n, Type.Fun(_, t) ; args ; formal_fv ; body } ->
     let fvindex formal_fv =
       let _, ts = sep_pairs formal_fv in
       let os = fold_sums size_of_t ts in
