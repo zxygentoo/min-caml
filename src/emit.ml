@@ -10,12 +10,8 @@ module TM = Map.Make(T_)
 module TS = Set.Make(T_)
 
 
-(* holding various information about functions *)
-type fun_info =
-  { ty : Type.t
-  ; idx : int
-  ; ty_idx : string
-  }
+(* type and index of functions *)
+type fun_info = { ty : Type.t ; idx : int }
 
 
 (* function information lookup by name *)
@@ -252,14 +248,14 @@ let rec g oc env fvs = function
     (* For indirect recursive self-calls,
        no need to actually make the closre (and backup/restore $CL),
        because someone must have done it. *)
-    let info = (M.find id !funindex) in
+    (* let info = (M.find id !funindex) in *)
     emit oc 
       "(call_indirect (type %s)\n\
        ;; bvs\n%s\
        ;; fnptr\n(i32.const %i))\n"
-      info.ty_idx
+      (TM.find (M.find id !funindex).ty !funtyindex)
       (smit_vars env fvs args)
-      info.idx
+      (M.find id !funindex).idx
 
   | AppDir(Id.Label "min_caml_make_array", [_; a])
     when M.mem a env && M.find a env = Type.Unit ->
@@ -357,12 +353,11 @@ let funsig_index fundefs =
      |> List.mapi (fun i t -> t, "$" ^ string_of_int i))
 
 
-let funinfo_index fundefs sigs =
+let funinfo_index fundefs =
   M.add_list
     (List.mapi
-      (fun i { name = (Id.Label n, t) ; _ } ->
-        n, { ty = t ; idx = i ; ty_idx = TM.find t sigs })
-      fundefs)
+       (fun i { name = (Id.Label n, t) ; _ } -> n, { ty = t ; idx = i })
+       fundefs)
     M.empty
 
 
@@ -505,7 +500,7 @@ let emit_start oc start =
 
 let emitcode oc (Prog(fundefs, start)) =
   funtyindex := funsig_index fundefs ;
-  funindex := funinfo_index fundefs !funtyindex ;
+  funindex := funinfo_index fundefs ;
   emit oc "(module\n" ;
   emit_imports oc ;
   emit_memory oc ;
