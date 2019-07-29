@@ -94,41 +94,33 @@ let smit_vars env fvs args =
    so these array making functions will be quite annoying to write as
    JavaScript externals, for now we just do it in WebAssembly. *)
 let emit_make_array oc env fvs = function
-  | AppDir(Id.Label "min_caml_make_array", [n; a]) ->
-    emit oc
-      "(global.set $GA (i32.const 0))\n\
-       (global.set $GB (global.get $HP))\n\
-       (block\n\
-       (loop\n\
-       (br_if 1 (i32.eq (global.get $GA) %s))\n\
-       (i32.store\n(global.get $HP) %s)\n\
-       %s\n\
-       (global.set $GA (i32.add (global.get $GA) (i32.const 1)))\n\
-       (br 0)))\n\
-       (global.get $GB)\n"
-      (smit_var env fvs n)
-      (if M.mem a !funidx_env then
-         (* immediate function array *)
-         smit "(i32.const %i)" (M.find a !funidx_env)
-       else
-         smit_var env fvs a)
-      (smit_inc_hp 4)
-
+  | AppDir(Id.Label "min_caml_make_array", [n; a])
   | AppDir(Id.Label "min_caml_make_float_array", [n; a]) ->
+    let t = if M.mem a !funty_env then
+        (* function array *)
+        M.find a !funty_env
+      else
+        M.find a env
+    in
     emit oc
       "(global.set $GA (i32.const 0))\n\
        (global.set $GB (global.get $HP))\n\
        (block\n\
        (loop\n\
        (br_if 1 (i32.eq (global.get $GA) %s))\n\
-       (f64.store\n(global.get $HP) %s)\n\
+       (%s.store\n(global.get $HP) %s)\n\
        %s
        (global.set $GA (i32.add (global.get $GA) (i32.const 1)))\n\
        (br 0)))\n\
        (global.get $GB)\n"
       (smit_var env fvs n)
-      (smit_var env fvs a)
-      (smit_inc_hp 8)
+      (wt_of_t env t)
+      (if M.mem a !funidx_env then
+         (* function array *)
+         smit "(i32.const %i)" (M.find a !funidx_env)
+       else
+         smit_var env fvs a)
+      (smit_inc_hp (size_of_t t))
 
   | _ ->
     failwith "emit_make_array"
