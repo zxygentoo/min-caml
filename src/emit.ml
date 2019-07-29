@@ -10,13 +10,9 @@ module TM = Map.Make(T_)
 module TS = Set.Make(T_)
 
 
-(* holding various information about functions *)
-type fun_info =
-  { id : Id.t
-  ; ty : Type.t
-  ; idx : int
-  ; ty_idx : string
-  }
+(* type and index of functions *)
+type fun_info = { ty : Type.t ; idx : int }
+
 
 (* function information lookup by name *)
 let funindex = ref M.empty
@@ -223,10 +219,10 @@ let rec g oc env fvs = function
     let os = fold_sums (fun x -> x) ss in
     let total_size = (List.fold_left (+) 4 ss) in
     emit oc
-      "(; get HP ;)\n(set_local $%s (global.get $HP))\n\
-       (; malloc ;)\n%s\
-       (; store fnptr ;)\n(i32.store (local.get $%s) (i32.const %i))\n\
-       (; fvs ;)\n"
+      ";; get HP\n(set_local $%s (global.get $HP))\n\
+       ;; malloc\n%s\
+       ;; store fnptr\n(i32.store (local.get $%s) (i32.const %i))\n\
+       ;; fvs\n"
       id (smit_inc_hp total_size) id (M.find fname !funindex).idx ;
     List.iter2
       (fun fv o ->
@@ -238,12 +234,12 @@ let rec g oc env fvs = function
 
   | AppCls(id, args) when M.mem id env ->
     emit oc
-      "(; backup CL ;)\n(set_local $$cl_bak (global.get $CL))\n\
-       (; register cls to CL ;)\n(global.set $CL %s)\n\
+      ";; backup CL\n(set_local $$cl_bak (global.get $CL))\n\
+       ;; register cls to CL\n(global.set $CL %s)\n\
        (call_indirect (type %s)\n\
-       (; bvs ;)\n%s\n\
-       (; fnptr ;)\n(i32.load (global.get $CL)))\n\
-       (; restore CL ;)\n(global.set $CL (local.get $$cl_bak))\n"
+       ;; bvs\n%s\n\
+       ;; fnptr\n(i32.load (global.get $CL)))\n\
+       ;; restore CL\n(global.set $CL (local.get $$cl_bak))\n"
       (smit_var env fvs id)
       (TM.find (M.find id env) !funtyindex)
       (smit_vars env fvs args)
@@ -252,14 +248,14 @@ let rec g oc env fvs = function
     (* For indirect recursive self-calls,
        no need to actually make the closre (and backup/restore $CL),
        because someone must have done it. *)
-    let info = (M.find id !funindex) in
+    (* let info = (M.find id !funindex) in *)
     emit oc 
       "(call_indirect (type %s)\n\
-       (; bvs ;)\n%s\
-       (; fnptr ;)\n(i32.const %i))\n"
-      info.ty_idx
+       ;; bvs\n%s\
+       ;; fnptr\n(i32.const %i))\n"
+      (TM.find (M.find id !funindex).ty !funtyindex)
       (smit_vars env fvs args)
-      info.idx
+      (M.find id !funindex).idx
 
   | AppDir(Id.Label "min_caml_make_array", [_; a])
     when M.mem a env && M.find a env = Type.Unit ->
@@ -353,19 +349,16 @@ let funsig_index fundefs =
     TM.empty
     (fundefs
      |> List.map (fun { name = (_, t) ; _ } -> t)
-     |> TS.of_list |> TS.to_seq |> List.of_seq
+     |> TS.of_list |> TS.elements
      |> List.mapi (fun i t -> t, "$" ^ string_of_int i))
 
 
-let infos_of_fundefs fundefs sigs =
-  List.mapi
-    (fun i { name = (Id.Label n, t) ; _ } ->
-       { id = n ; ty = t ; idx = i ; ty_idx = TM.find t sigs })
-    fundefs
-
-
-let funinfo_index infos =
-  M.add_list (List.map (fun e -> e.id, e) infos) M.empty
+let funinfo_index fundefs =
+  M.add_list
+    (List.mapi
+       (fun i { name = (Id.Label n, t) ; _ } -> n, { ty = t ; idx = i })
+       fundefs)
+    M.empty
 
 
 (* emit helpers *)
@@ -442,11 +435,9 @@ let emit_memory oc =
 
 
 let emit_globals oc =
-  emit oc "(; heap pointer ;)\n\
-           (global $HP (mut i32) (i32.const 0))\n\
-           (; closure pointer ;)\n
-           (global $CL (mut i32) (i32.const 0))\n\
-           (; 32-bit generic registers ;)\n
+  emit oc ";; heap pointer\n(global $HP (mut i32) (i32.const 0))\n\
+           ;; closure pointer\n(global $CL (mut i32) (i32.const 0))\n\
+           ;; 32-bit generic registers\n\
            (global $GA (mut i32) (i32.const 0))\n\
            (global $GB (mut i32) (i32.const 0))\n\n"
 
@@ -473,7 +464,7 @@ let emit_types oc sigs =
 
 
 let emit_func oc = function
-  | { name = (Id.Label n, Type.Fun(_, t)) ; args ; formal_fv ; body } ->
+  | { name = Id.Label n, Type.Fun(_, t) ; args ; formal_fv ; body } ->
     let fvindex formal_fv =
       let _, ts = sep_pairs formal_fv in
       let os = fold_sums size_of_t ts in
@@ -509,7 +500,7 @@ let emit_start oc start =
 
 let emitcode oc (Prog(fundefs, start)) =
   funtyindex := funsig_index fundefs ;
-  funindex := funinfo_index (infos_of_fundefs fundefs !funtyindex) ;
+  funindex := funinfo_index fundefs ;
   emit oc "(module\n" ;
   emit_imports oc ;
   emit_memory oc ;
