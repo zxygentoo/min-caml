@@ -7,13 +7,13 @@ join-reg2.ml join-reg.ml join-stack2.ml join-stack3.ml join-stack.ml \
 manyargs.ml matmul-flat.ml matmul.ml non-tail-if2.ml non-tail-if.ml print.ml \
 shuffle.ml spill2.ml spill3.ml spill.ml sum.ml sum-tail.ml toomanyargs.ml
 
+.PRECIOUS %.wat
 
 TESTS   = $(addprefix $(TESTSDIR)/,$(SOURCES))
 WATS    = $(TESTS:.ml=.wat)
 RESULTS = $(TESTS:.ml=.result)
 ANSWERS = $(TESTS:.ml=.answer)
 DIFFS   = $(TESTS:.ml=.diff)
-
 
 all : mincaml
 	cp $(BUILDDIR)/main.exe mincaml
