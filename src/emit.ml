@@ -10,15 +10,9 @@ module TM = Map.Make(T_)
 module TS = Set.Make(T_)
 
 
-(* type and index of functions *)
-type fun_info = { ty : Type.t ; idx : int }
-
-
-(* function information lookup by name *)
-let funindex = ref M.empty
-
-(* function type index lookup by type *)
-let funtyindex = ref TM.empty
+let funtyidx_env = ref TM.empty
+let funidx_env = ref M.empty
+let funty_env = ref M.empty
 
 
 (* general helpers *)
@@ -113,9 +107,9 @@ let emit_make_array oc env fvs = function
        (br 0)))\n\
        (global.get $GB)\n"
       (smit_var env fvs n)
-      (if M.mem a !funindex then
+      (if M.mem a !funidx_env then
          (* immediate function array *)
-         smit "(i32.const %i)" (M.find a !funindex).idx
+         smit "(i32.const %i)" (M.find a !funidx_env)
        else
          smit_var env fvs a)
       (smit_inc_hp 4)
@@ -223,7 +217,7 @@ let rec g oc env fvs = function
        ;; malloc\n%s\
        ;; store fnptr\n(i32.store (local.get $%s) (i32.const %i))\n\
        ;; fvs\n"
-      id (smit_inc_hp total_size) id (M.find fname !funindex).idx ;
+      id (smit_inc_hp total_size) id (M.find fname !funidx_env) ;
     List.iter2
       (fun fv o ->
          emit oc "(i32.store (i32.add (i32.const %i) (local.get $%s)) %s)\n"
@@ -241,21 +235,21 @@ let rec g oc env fvs = function
        ;; fnptr\n(i32.load (global.get $CL)))\n\
        ;; restore CL\n(global.set $CL (local.get $$cl_bak))\n"
       (smit_var env fvs id)
-      (TM.find (M.find id env) !funtyindex)
+      (TM.find (M.find id env) !funtyidx_env)
       (smit_vars env fvs args)
 
   | AppCls(id, args) ->
     (* For indirect recursive self-calls,
        no need to actually make the closre (and backup/restore $CL),
        because someone must have done it. *)
-    (* let info = (M.find id !funindex) in *)
+    (* let info = (M.find id !funidx_env) in *)
     emit oc 
       "(call_indirect (type %s)\n\
        ;; bvs\n%s\
        ;; fnptr\n(i32.const %i))\n"
-      (TM.find (M.find id !funindex).ty !funtyindex)
+      (TM.find (M.find id !funty_env) !funtyidx_env)
       (smit_vars env fvs args)
-      (M.find id !funindex).idx
+      (M.find id !funidx_env)
 
   | AppDir(Id.Label "min_caml_make_array", [_; a])
     when M.mem a env && M.find a env = Type.Unit ->
@@ -339,26 +333,6 @@ let rec g oc env fvs = function
 
   | ExtArray Id.Label label ->
     emit oc "(global.get $min_caml_%s)" label
-
-
-(* function index building *)
-
-let funsig_index fundefs =
-  List.fold_left
-    (fun tm (t, idx) -> TM.add t idx tm)
-    TM.empty
-    (fundefs
-     |> List.map (fun { name = (_, t) ; _ } -> t)
-     |> TS.of_list |> TS.elements
-     |> List.mapi (fun i t -> t, "$" ^ string_of_int i))
-
-
-let funinfo_index fundefs =
-  M.add_list
-    (List.mapi
-       (fun i { name = (Id.Label n, t) ; _ } -> n, { ty = t ; idx = i })
-       fundefs)
-    M.empty
 
 
 (* emit helpers *)
@@ -496,17 +470,42 @@ let emit_start oc start =
   emit oc "(start $$start)"
 
 
+(* function index building *)
+
+let build_funtyidx_env fundefs =
+  List.fold_left
+    (fun tm (t, idx) -> TM.add t idx tm)
+    TM.empty
+    (fundefs
+     |> List.map (fun { name = (_, t) ; _ } -> t)
+     |> TS.of_list |> TS.elements
+     |> List.mapi (fun i t -> t, "$" ^ string_of_int i))
+
+
+let build_funidx_env fundefs =
+  M.add_list
+    (List.mapi (fun i { name = (Id.Label n, _) ; _ } -> n, i) fundefs)
+    M.empty
+
+
+let build_funty_env fundefs =
+  M.add_list
+    (List.map (fun { name = (Id.Label n, t) ; _ } -> n, t) fundefs)
+    M.empty
+
+
 (* emit module *)
 
 let emitcode oc (Prog(fundefs, start)) =
-  funtyindex := funsig_index fundefs ;
-  funindex := funinfo_index fundefs ;
+  funtyidx_env := build_funtyidx_env fundefs ;
+  funidx_env := build_funidx_env fundefs ;
+  funty_env := build_funty_env fundefs ;
   emit oc "(module\n" ;
   emit_imports oc ;
   emit_memory oc ;
   emit_globals oc ;
   emit_table oc fundefs ;
-  emit_types oc !funtyindex ;
+  emit_types oc !funtyidx_env ;
   emit_funcs oc fundefs ;
   emit_start oc start ;
   emit oc ")"
