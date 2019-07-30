@@ -178,9 +178,11 @@ let rec g oc env fvs = function
     g oc env fvs e1
 
   | IfLE(x, y, e1, e2, t) ->
-    emit oc "(if (result %s) (%s.le_s %s %s)\n"
+    let xt = (M.find x env) in
+    emit oc "(if (result %s) (%s.%s %s %s)\n"
       (wt_of_t env t)
-      (wt_of_t env (M.find x env))
+      (wt_of_t env xt)
+      (if size_of_t xt = 8 then "le" else "le_s")
       (smit_var env fvs x)
       (smit_var env fvs y) ;
     emit oc "(then\n" ; g oc env fvs e1 ; emit oc ")\n" ;
