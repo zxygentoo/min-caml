@@ -34,7 +34,7 @@ let rec g env = function
 
   | App(x, ys) when M.mem x env ->
     let (zs, e) = M.find x env in
-    Format.eprintf "inlining %s@." x;
+    (* inlining *)
     let env' = List.fold_left2
         (fun env' (z, _t) y -> M.add z y env') M.empty zs ys in
     Alpha.g env' e

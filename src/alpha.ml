@@ -2,23 +2,20 @@ open Knormal
 
 
 let find x env =
-  try
-    M.find x env
-  with Not_found ->
-    x
+  try M.find x env with Not_found -> x
 
 
 let rec g env = function
   | Unit ->
     Unit
 
-  | Int(i) ->
-    Int(i)
+  | Int i ->
+    Int i
 
-  | Float(d) ->
-    Float(d)
+  | Float d ->
+    Float d
 
-  | Neg(x) ->
+  | Neg x ->
     Neg(find x env)
 
   | Add(x, y) ->
@@ -27,7 +24,7 @@ let rec g env = function
   | Sub(x, y) ->
     Sub(find x env, find y env)
 
-  | FNeg(x) ->
+  | FNeg x ->
     FNeg(find x env)
 
   | FAdd(x, y) ->
@@ -52,7 +49,7 @@ let rec g env = function
     let x' = Id.genid x in
     Let((x', t), g env e1, g (M.add x x' env) e2)
 
-  | Var(x) ->
+  | Var x ->
     Var(find x env)
 
   | LetRec({ name = (x, t); args; body }, e2) ->
@@ -60,18 +57,16 @@ let rec g env = function
     let arg_ids = List.map fst args in
     let env' = M.add_list2 arg_ids (List.map Id.genid arg_ids) env in
     LetRec(
-      {
-        name = (find x env, t);
-        args = List.map (fun (y, t) -> (find y env', t)) args;
-        body = g env' body
+      { name = (find x env, t)
+      ; args = List.map (fun (y, t) -> (find y env', t)) args
+      ; body = g env' body
       },
-      g env e2
-    )
+      g env e2)
 
   | App(x, ys) ->
     App(find x env, List.map (fun y -> find y env) ys)
 
-  | Tuple(xs) ->
+  | Tuple xs ->
     Tuple(List.map (fun x -> find x env) xs)
 
   | LetTuple(xts, y, e) ->
@@ -80,8 +75,7 @@ let rec g env = function
     LetTuple(
       List.map (fun (x, t) -> (find x env', t)) xts,
       find y env,
-      g env' e
-    )
+      g env' e)
 
   | Get(x, y) ->
     Get(find x env, find y env)
@@ -89,18 +83,11 @@ let rec g env = function
   | Put(x, y, z) ->
     Put(find x env, find y env, find z env)
 
-  | ExtArray(x) ->
-    ExtArray(
-      (* no covert external identifier *)
-      x
-    )
+  | ExtArray x ->
+    ExtArray x
 
   | ExtFunApp(x, ys) ->
-    ExtFunApp(
-      (* no covert external identifier *)
-      x,
-      List.map (fun y -> find y env) ys
-    )
+    ExtFunApp(x, List.map (fun y -> find y env) ys)
 
 
 let convert =
