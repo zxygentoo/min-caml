@@ -1,10 +1,12 @@
 module K = Knormal
 
+
 type closure =
   { entry : Id.label
   ; actual_fv : Id.t list
   }
 (* [@@deriving show] *)
+
 
 type t =
   | Unit
@@ -30,7 +32,8 @@ type t =
   | Get of Id.t * Id.t
   | Put of Id.t * Id.t * Id.t
   | ExtArray of Id.label
-(* [@@deriving show] *)
+  (* [@@deriving show] *)
+
 
 type fundef =
   { name : Id.label * Type.t
@@ -40,17 +43,21 @@ type fundef =
   }
 (* [@@deriving show] *)
 
+
 type prog = Prog of fundef list * t
 (* [@@deriving show] *)
 
 
 let toplevel : fundef list ref = ref []
 
+
 let backup_toplevel _ =
   !toplevel
 
+
 let restore_toplevel v =
   toplevel := v
+
 
 let add_toplevel_fundef f =
   toplevel := f :: !toplevel
@@ -101,8 +108,10 @@ let rec free_vars = function
   | Put(x, y, z) ->
     S.of_list [x; y; z]
 
+
 let args_fv args =
   S.of_list (List.map fst args)
+
 
 (* closure conversion *)
 let rec g env known = function
@@ -235,6 +244,7 @@ let rec g env known = function
 
   | K.ExtFunApp(x, ys) ->
     AppDir(Id.Label("min_caml_" ^ x), ys)
+
 
 let flattern e =
   toplevel := [];

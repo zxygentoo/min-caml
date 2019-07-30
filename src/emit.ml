@@ -10,20 +10,9 @@ module TM = Map.Make(T_)
 module TS = Set.Make(T_)
 
 
-(* holding various information about functions *)
-type fun_info =
-  { id : Id.t
-  ; ty : Type.t
-  ; idx : int
-  ; ty_idx : string
-  ; fn : Closure.fundef
-  }
-
-(* function information lookup by name *)
-let funindex = ref M.empty
-
-(* function type index lookup by type *)
-let funtyindex = ref TM.empty
+let funtyidx_env = ref TM.empty
+let funidx_env = ref M.empty
+let funty_env = ref M.empty
 
 
 (* general helpers *)
@@ -86,60 +75,52 @@ let smit_var env fvs id =
     begin
       match M.find id fvs with
       | Type.Unit, _ -> ""
-      | t, o -> smit "(%s.load (i32.add (i32.const %i) (global.get $CL)))\n"
+      | t, o -> smit "(%s.load (i32.add (i32.const %i) (global.get $CL)))"
                   (wt_of_t env t) o
     end
   else
     (* locals *)
     begin match M.find id env with
       | Type.Unit -> ""
-      | _ -> smit "(local.get $%s)\n" id
+      | _ -> smit "(local.get $%s)" id
     end
 
 
 let smit_vars env fvs args =
-  Id.pp_list_sep "" (List.map (smit_var env fvs) args)
+  Id.pp_list (List.map (smit_var env fvs) args)
 
 
 (* Currently NodeJS doesn't support WebAssembly.Global API,
    so these array making functions will be quite annoying to write as
    JavaScript externals, for now we just do it in WebAssembly. *)
 let emit_make_array oc env fvs = function
-  | AppDir(Id.Label "min_caml_make_array", [n; a]) ->
-    emit oc
-      "(global.set $GA (i32.const 0))\n\
-       (global.set $GB (global.get $HP))\n\
-       (block\n\
-       (loop\n\
-       (br_if 1 (i32.eq (global.get $GA) %s))\n\
-       (i32.store\n(global.get $HP) %s)\n\
-       %s\n\
-       (global.set $GA (i32.add (global.get $GA) (i32.const 1)))\n\
-       (br 0)))\n\
-       (global.get $GB)\n"
-      (smit_var env fvs n)
-      (if M.mem a !funindex then
-         (* immediate function array *)
-         smit "(i32.const %i)" (M.find a !funindex).idx
-       else
-         smit_var env fvs a)
-      (smit_inc_hp 4)
-
+  | AppDir(Id.Label "min_caml_make_array", [n; a])
   | AppDir(Id.Label "min_caml_make_float_array", [n; a]) ->
+    let t = if M.mem a !funty_env then
+        (* function array *)
+        M.find a !funty_env
+      else
+        M.find a env
+    in
     emit oc
       "(global.set $GA (i32.const 0))\n\
        (global.set $GB (global.get $HP))\n\
        (block\n\
        (loop\n\
        (br_if 1 (i32.eq (global.get $GA) %s))\n\
-       (f64.store\n(global.get $HP) %s)\n\
+       (%s.store\n(global.get $HP) %s)\n\
        %s
        (global.set $GA (i32.add (global.get $GA) (i32.const 1)))\n\
        (br 0)))\n\
        (global.get $GB)\n"
       (smit_var env fvs n)
-      (smit_var env fvs a)
-      (smit_inc_hp 8)
+      (wt_of_t env t)
+      (if M.mem a !funidx_env then
+         (* function array *)
+         smit "(i32.const %i)" (M.find a !funidx_env)
+       else
+         smit_var env fvs a)
+      (smit_inc_hp (size_of_t t))
 
   | _ ->
     failwith "emit_make_array"
@@ -197,9 +178,11 @@ let rec g oc env fvs = function
     g oc env fvs e1
 
   | IfLE(x, y, e1, e2, t) ->
-    emit oc "(if (result %s) (%s.le_s %s %s)\n"
+    let xt = (M.find x env) in
+    emit oc "(if (result %s) (%s.%s %s %s)\n"
       (wt_of_t env t)
-      (wt_of_t env (M.find x env))
+      (wt_of_t env xt)
+      (if size_of_t xt = 8 then "le" else "le_s")
       (smit_var env fvs x)
       (smit_var env fvs y) ;
     emit oc "(then\n" ; g oc env fvs e1 ; emit oc ")\n" ;
@@ -210,7 +193,7 @@ let rec g oc env fvs = function
     g oc (M.add id Type.Unit env) fvs e2
 
   | Let((id, t), e1, e2) ->
-    emit oc "(set_local $%s " id ;
+    emit oc "(local.set $%s " id ;
     g oc env fvs e1 ;
     emit oc ")\n" ;
     g oc (M.add id t env) fvs e2
@@ -224,11 +207,11 @@ let rec g oc env fvs = function
     let os = fold_sums (fun x -> x) ss in
     let total_size = (List.fold_left (+) 4 ss) in
     emit oc
-      "(; get HP ;)\n(set_local $%s (global.get $HP))\n\
-       (; malloc ;)\n%s\
-       (; store fnptr ;)\n(i32.store (local.get $%s) (i32.const %i))\n\
-       (; fvs ;)\n"
-      id (smit_inc_hp total_size) id (M.find fname !funindex).idx ;
+      ";; get HP\n(local.set $%s (global.get $HP))\n\
+       ;; malloc\n%s\
+       ;; store fnptr\n(i32.store (local.get $%s) (i32.const %i))\n\
+       ;; fvs\n"
+      id (smit_inc_hp total_size) id (M.find fname !funidx_env) ;
     List.iter2
       (fun fv o ->
          emit oc "(i32.store (i32.add (i32.const %i) (local.get $%s)) %s)\n"
@@ -239,28 +222,28 @@ let rec g oc env fvs = function
 
   | AppCls(id, args) when M.mem id env ->
     emit oc
-      "(; backup CL ;)\n(set_local $$cl_bak (global.get $CL))\n\
-       (; register cls to CL ;)\n(global.set $CL %s)\n\
+      ";; backup CL\n(local.set $$cl_bak (global.get $CL))\n\
+       ;; register cls to CL\n(global.set $CL %s)\n\
        (call_indirect (type %s)\n\
-       (; bvs ;)\n%s\n\
-       (; fnptr ;)\n(i32.load (global.get $CL)))\n\
-       (; restore CL ;)\n(global.set $CL (local.get $$cl_bak))\n"
+       ;; bvs\n%s\n\
+       ;; fnptr\n(i32.load (global.get $CL)))\n\
+       ;; restore CL\n(global.set $CL (local.get $$cl_bak))\n"
       (smit_var env fvs id)
-      (TM.find (M.find id env) !funtyindex)
+      (TM.find (M.find id env) !funtyidx_env)
       (smit_vars env fvs args)
 
   | AppCls(id, args) ->
     (* For indirect recursive self-calls,
        no need to actually make the closre (and backup/restore $CL),
        because someone must have done it. *)
-    let info = (M.find id !funindex) in
+    (* let info = (M.find id !funidx_env) in *)
     emit oc 
       "(call_indirect (type %s)\n\
-       (; bvs ;)\n%s\
-       (; fnptr ;)\n(i32.const %i))\n"
-      info.ty_idx
+       ;; bvs\n%s\
+       ;; fnptr\n(i32.const %i))\n"
+      (TM.find (M.find id !funty_env) !funtyidx_env)
       (smit_vars env fvs args)
-      info.idx
+      (M.find id !funidx_env)
 
   | AppDir(Id.Label "min_caml_make_array", [_; a])
     when M.mem a env && M.find a env = Type.Unit ->
@@ -292,7 +275,7 @@ let rec g oc env fvs = function
     let os = hd_based (fold_sums size_of_t ts) in
     List.iter2
       (fun (x, t) o ->
-         emit oc "(set_local $%s (%s.load (i32.add (i32.const %i) %s)))\n"
+         emit oc "(local.set $%s (%s.load (i32.add (i32.const %i) %s)))\n"
            x (wt_of_t env t) o (smit_var env fvs y))
       xts
       os ;
@@ -344,29 +327,6 @@ let rec g oc env fvs = function
 
   | ExtArray Id.Label label ->
     emit oc "(global.get $min_caml_%s)" label
-
-
-(* function index building *)
-
-let funsig_index fundefs =
-  List.fold_left
-    (fun tm (t, idx) -> TM.add t idx tm)
-    TM.empty
-    (fundefs
-     |> List.map (fun { name = (_, t) ; _ } -> t)
-     |> TS.of_list |> TS.to_seq |> List.of_seq
-     |> List.mapi (fun i t -> t, "$" ^ string_of_int i))
-
-
-let infos_of_fundefs fundefs sigs =
-  List.mapi
-    (fun i ({ name = (Id.Label n, t) ; _ } as fundef) ->
-       { id = n ; ty = t ; idx = i ; ty_idx = TM.find t sigs ; fn = fundef })
-    fundefs
-
-
-let funinfo_index fun_infos =
-  M.add_list (List.map (fun e -> e.id, e) fun_infos) M.empty
 
 
 (* emit helpers *)
@@ -428,14 +388,18 @@ let emit_imports oc =
     [
       ("print_newline", "") ;
       ("print_int",     "(param i32)") ;
+      ("print_byte",    "(param i32)") ;
       ("abs_float",     "(param f64) (result f64)") ;
       ("sqrt",          "(param f64) (result f64)") ;
       ("cos",           "(param f64) (result f64)") ;
       ("sin",           "(param f64) (result f64)") ;
+      ("atan",          "(param f64) (result f64)") ;
+      ("floor",         "(param f64) (result i32)") ;
       ("float_of_int",  "(param i32) (result f64)") ;
       ("int_of_float",  "(param f64) (result i32)") ;
       ("truncate",      "(param f64) (result i32)")
-    ]
+    ] ;
+  emit oc "\n"
 
 
 let emit_memory oc =
@@ -443,11 +407,9 @@ let emit_memory oc =
 
 
 let emit_globals oc =
-  emit oc "(; heap pointer ;)\n\
-           (global $HP (mut i32) (i32.const 0))\n\
-           (; closure pointer ;)\n
-           (global $CL (mut i32) (i32.const 0))\n\
-           (; 32-bit generic registers ;)\n
+  emit oc ";; heap pointer\n(global $HP (mut i32) (i32.const 0))\n\
+           ;; closure pointer\n(global $CL (mut i32) (i32.const 0))\n\
+           ;; 32-bit generic registers\n\
            (global $GA (mut i32) (i32.const 0))\n\
            (global $GB (mut i32) (i32.const 0))\n\n"
 
@@ -466,15 +428,16 @@ let emit_types oc sigs =
         emit oc "(type %s (func" idx ;
         List.iter (emit_param oc) args ;
         emit_result oc ret_t ;
-        emit oc "))\n\n"
+        emit oc "))\n"
 
       | _ ->
         failwith "emit_types")
-    (TM.bindings sigs)
+    (TM.bindings sigs) ;
+  emit oc "\n"
 
 
 let emit_func oc = function
-  | { name = (Id.Label n, Type.Fun(_, t)) ; args ; formal_fv ; body } ->
+  | { name = Id.Label n, Type.Fun(_, t) ; args ; formal_fv ; body } ->
     let fvindex formal_fv =
       let _, ts = sep_pairs formal_fv in
       let os = fold_sums size_of_t ts in
@@ -490,7 +453,7 @@ let emit_func oc = function
       let fvs = M.add_list (fvindex formal_fv) M.empty in
       g oc env fvs body
     ) ;
-    emit oc ")\n\n"
+    emit oc ")\n;; end of func %s\n\n" n
 
   | _ ->
     failwith "emit_func"
@@ -506,17 +469,42 @@ let emit_start oc start =
   emit oc "(start $$start)"
 
 
+(* function index building *)
+
+let build_funtyidx_env fundefs =
+  List.fold_left
+    (fun tm (t, idx) -> TM.add t idx tm)
+    TM.empty
+    (fundefs
+     |> List.map (fun { name = (_, t) ; _ } -> t)
+     |> TS.of_list |> TS.elements
+     |> List.mapi (fun i t -> t, "$" ^ string_of_int i))
+
+
+let build_funidx_env fundefs =
+  M.add_list
+    (List.mapi (fun i { name = (Id.Label n, _) ; _ } -> n, i) fundefs)
+    M.empty
+
+
+let build_funty_env fundefs =
+  M.add_list
+    (List.map (fun { name = (Id.Label n, t) ; _ } -> n, t) fundefs)
+    M.empty
+
+
 (* emit module *)
 
 let emitcode oc (Prog(fundefs, start)) =
-  funtyindex := funsig_index fundefs ;
-  funindex := funinfo_index (infos_of_fundefs fundefs !funtyindex) ;
-  emit oc "(module\n" ;
+  funtyidx_env := build_funtyidx_env fundefs ;
+  funidx_env := build_funidx_env fundefs ;
+  funty_env := build_funty_env fundefs ;
+  emit oc "(module\n\n" ;
   emit_imports oc ;
   emit_memory oc ;
   emit_globals oc ;
   emit_table oc fundefs ;
-  emit_types oc !funtyindex ;
+  emit_types oc !funtyidx_env ;
   emit_funcs oc fundefs ;
   emit_start oc start ;
   emit oc ")"
