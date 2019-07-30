@@ -75,19 +75,19 @@ let smit_var env fvs id =
     begin
       match M.find id fvs with
       | Type.Unit, _ -> ""
-      | t, o -> smit "(%s.load (i32.add (i32.const %i) (global.get $CL)))\n"
+      | t, o -> smit "(%s.load (i32.add (i32.const %i) (global.get $CL)))"
                   (wt_of_t env t) o
     end
   else
     (* locals *)
     begin match M.find id env with
       | Type.Unit -> ""
-      | _ -> smit "(local.get $%s)\n" id
+      | _ -> smit "(local.get $%s)" id
     end
 
 
 let smit_vars env fvs args =
-  Id.pp_list_sep "" (List.map (smit_var env fvs) args)
+  Id.pp_list (List.map (smit_var env fvs) args)
 
 
 (* Currently NodeJS doesn't support WebAssembly.Global API,
@@ -193,7 +193,7 @@ let rec g oc env fvs = function
     g oc (M.add id Type.Unit env) fvs e2
 
   | Let((id, t), e1, e2) ->
-    emit oc "(set_local $%s " id ;
+    emit oc "(local.set $%s " id ;
     g oc env fvs e1 ;
     emit oc ")\n" ;
     g oc (M.add id t env) fvs e2
@@ -207,7 +207,7 @@ let rec g oc env fvs = function
     let os = fold_sums (fun x -> x) ss in
     let total_size = (List.fold_left (+) 4 ss) in
     emit oc
-      ";; get HP\n(set_local $%s (global.get $HP))\n\
+      ";; get HP\n(local.set $%s (global.get $HP))\n\
        ;; malloc\n%s\
        ;; store fnptr\n(i32.store (local.get $%s) (i32.const %i))\n\
        ;; fvs\n"
@@ -222,7 +222,7 @@ let rec g oc env fvs = function
 
   | AppCls(id, args) when M.mem id env ->
     emit oc
-      ";; backup CL\n(set_local $$cl_bak (global.get $CL))\n\
+      ";; backup CL\n(local.set $$cl_bak (global.get $CL))\n\
        ;; register cls to CL\n(global.set $CL %s)\n\
        (call_indirect (type %s)\n\
        ;; bvs\n%s\n\
@@ -275,7 +275,7 @@ let rec g oc env fvs = function
     let os = hd_based (fold_sums size_of_t ts) in
     List.iter2
       (fun (x, t) o ->
-         emit oc "(set_local $%s (%s.load (i32.add (i32.const %i) %s)))\n"
+         emit oc "(local.set $%s (%s.load (i32.add (i32.const %i) %s)))\n"
            x (wt_of_t env t) o (smit_var env fvs y))
       xts
       os ;
@@ -388,14 +388,18 @@ let emit_imports oc =
     [
       ("print_newline", "") ;
       ("print_int",     "(param i32)") ;
+      ("print_byte",    "(param i32)") ;
       ("abs_float",     "(param f64) (result f64)") ;
       ("sqrt",          "(param f64) (result f64)") ;
       ("cos",           "(param f64) (result f64)") ;
       ("sin",           "(param f64) (result f64)") ;
+      ("atan",          "(param f64) (result f64)") ;
+      ("floor",         "(param f64) (result i32)") ;
       ("float_of_int",  "(param i32) (result f64)") ;
       ("int_of_float",  "(param f64) (result i32)") ;
       ("truncate",      "(param f64) (result i32)")
-    ]
+    ] ;
+  emit oc "\n"
 
 
 let emit_memory oc =
@@ -424,11 +428,12 @@ let emit_types oc sigs =
         emit oc "(type %s (func" idx ;
         List.iter (emit_param oc) args ;
         emit_result oc ret_t ;
-        emit oc "))\n\n"
+        emit oc "))\n"
 
       | _ ->
         failwith "emit_types")
-    (TM.bindings sigs)
+    (TM.bindings sigs) ;
+  emit oc "\n"
 
 
 let emit_func oc = function
@@ -448,7 +453,7 @@ let emit_func oc = function
       let fvs = M.add_list (fvindex formal_fv) M.empty in
       g oc env fvs body
     ) ;
-    emit oc ")\n\n"
+    emit oc ")\n;; end of func %s\n\n" n
 
   | _ ->
     failwith "emit_func"
@@ -494,7 +499,7 @@ let emitcode oc (Prog(fundefs, start)) =
   funtyidx_env := build_funtyidx_env fundefs ;
   funidx_env := build_funidx_env fundefs ;
   funty_env := build_funty_env fundefs ;
-  emit oc "(module\n" ;
+  emit oc "(module\n\n" ;
   emit_imports oc ;
   emit_memory oc ;
   emit_globals oc ;
