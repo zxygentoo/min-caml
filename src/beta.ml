@@ -48,7 +48,7 @@ let rec g env = function
   | Let((x, t), e1, e2) ->
     begin match g env e1 with
       | Var y ->
-        Format.eprintf "beta-reducing %s = %s@." x y;
+        (* beta reduction *)
         g (M.add x y env) e2
 
       | e1' ->

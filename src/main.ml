@@ -3,7 +3,6 @@ let inline_threshold = Inline.threshold
 
 
 let rec optimize_pass n ast =
-  Format.eprintf "==> iteration: %d@." n ;
   if n = 0 then
     ast
   else

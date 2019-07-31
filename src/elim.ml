@@ -4,20 +4,16 @@ open Knormal
 let rec effect = function
   | Let(_, e1, e2)
   | IfEq(_, _, e1, e2, _)
-  | IfLE(_, _, e1, e2, _) ->
-    effect e1 || effect e2
+  | IfLE(_, _, e1, e2, _) -> effect e1 || effect e2
 
   | LetRec(_, e)
-  | LetTuple(_, _, e) ->
-    effect e
+  | LetTuple(_, _, e) -> effect e
 
   | App _
   | Put _
-  | ExtFunApp _ ->
-    true
+  | ExtFunApp _ -> true
 
-  | _ ->
-    false
+  | _ -> false
 
 
 let rec f = function
