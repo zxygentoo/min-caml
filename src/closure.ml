@@ -188,11 +188,7 @@ let rec g env known = function
 
     (* add toplevel fundef *)
     add_toplevel_fundef
-      { name = (Id.Label(x), t)
-      ; args
-      ; formal_fv
-      ; body = body'
-      } ;
+      { name = Id.Label(x), t ; args ; formal_fv ; body = body' } ;
 
     (* make or eliminate closure *)
     let cls_convert_exp e =
