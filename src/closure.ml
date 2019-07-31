@@ -170,7 +170,7 @@ let rec g env known = function
     let no_fvs = S.is_empty (S.diff (free_vars body') (args_fv args)) in
     (* restore toplevel if actually has fvs *)
     if not no_fvs then restore_toplevel backup ;
-    (* real known / body / fvs / fvts *)
+    (* real known and body *)
     let known, body = if no_fvs
       then known', body'
       else known, g fn_env' known body in

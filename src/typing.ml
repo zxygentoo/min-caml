@@ -140,14 +140,15 @@ let rec unify t1 t2 =
     ()
 
   | Type.Fun(t1s, t1'), Type.Fun(t2s, t2') ->
-    (try List.iter2 unify t1s t2s
-     with Invalid_argument(_) ->
-       raise (Unify(t1, t2))) ;
+    begin try List.iter2 unify t1s t2s
+      with Invalid_argument _ -> raise (Unify(t1, t2))
+    end ;
     unify t1' t2'
 
   | Type.Tuple(t1s), Type.Tuple(t2s) ->
-    (try List.iter2 unify t1s t2s
-     with Invalid_argument(_) -> raise (Unify(t1, t2)))
+    begin try List.iter2 unify t1s t2s
+      with Invalid_argument _ -> raise (Unify(t1, t2))
+    end
 
   | Type.Array(t1), Type.Array(t2) ->
     unify t1 t2
@@ -238,8 +239,7 @@ let rec g env e =
 
     | Var x ->
       Format.eprintf "==> free variable `%s` assumed as external@." x ;
-      let t = Type.gentyp () in
-      extenv := M.add x t !extenv ;
+      let t = Type.gentyp () in extenv := M.add x t !extenv ;
       t
 
     | LetRec({ name = (x, t); args = yts; body = e1 }, e2) ->
@@ -281,14 +281,9 @@ let rec g env e =
 
 let infer e =
   extenv := M.empty ;
-  (* begin match deref_type (g M.empty e) with
-     | Type.Unit -> ()
-     | _ -> Format.eprintf "warning: final result does not have type unit@."
-     end ; *)
-  begin
-    try unify Type.Unit (g M.empty e) with
-    | Unify _ ->
-      Format.eprintf "==> [warning] top level does not have type unit@."
+  begin try unify Type.Unit (g M.empty e) 
+    with Unify _ ->
+      Format.eprintf "==> [warning] toplevel doesn't have type unit@."
   end ;
   extenv := M.map deref_type !extenv ;
   deref_term e
