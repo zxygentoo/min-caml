@@ -103,16 +103,16 @@ let emit_make_array oc env fvs = function
         M.find a env
     in
     emit oc
-      "(global.set $GA (i32.const 0))\n\
-       (global.set $GB (global.get $HP))\n\
+      "(global.set $R0 (i32.const 0))\n\
+       (global.set $R1 (global.get $HP))\n\
        (block\n\
        (loop\n\
-       (br_if 1 (i32.eq (global.get $GA) %s))\n\
+       (br_if 1 (i32.eq (global.get $R0) %s))\n\
        (%s.store\n(global.get $HP) %s)\n\
        %s
-       (global.set $GA (i32.add (global.get $GA) (i32.const 1)))\n\
+       (global.set $R0 (i32.add (global.get $R0) (i32.const 1)))\n\
        (br 0)))\n\
-       (global.get $GB)\n"
+       (global.get $R1)\n"
       (smit_var env fvs n)
       (wt_of_t env t)
       (if M.mem a !funidx_env then
@@ -261,14 +261,14 @@ let rec g oc env fvs = function
     let ss = List.map size_of_t ts in
     let total_size = List.fold_left (+) 0 ss in
     let os = hd_based (fold_sums (fun x -> x) ss) in
-    emit oc "(global.set $GA (global.get $HP))\n%s" (smit_inc_hp total_size) ;
+    emit oc "(global.set $R0 (global.get $HP))\n%s" (smit_inc_hp total_size) ;
     List.iter2
       (fun x (t, o) ->
-         emit oc "(%s.store (i32.add (global.get $GA) (i32.const %i)) %s)\n"
+         emit oc "(%s.store (i32.add (global.get $R0) (i32.const %i)) %s)\n"
            (wt_of_t env t) o (smit_var env fvs x))
       xs
       (List.map2 (fun t o -> (t, o)) ts os) ;
-    emit oc "(global.get $GA)\n"
+    emit oc "(global.get $R0)\n"
 
   | LetTuple(xts, y, e) ->
     let _, ts = sep_pairs xts in
@@ -410,8 +410,8 @@ let emit_globals oc =
   emit oc ";; heap pointer\n(global $HP (mut i32) (i32.const 0))\n\
            ;; closure pointer\n(global $CL (mut i32) (i32.const 0))\n\
            ;; 32-bit generic registers\n\
-           (global $GA (mut i32) (i32.const 0))\n\
-           (global $GB (mut i32) (i32.const 0))\n\n"
+           (global $R0 (mut i32) (i32.const 0))\n\
+           (global $R1 (mut i32) (i32.const 0))\n\n"
 
 
 let emit_table oc fds =
