@@ -96,8 +96,7 @@ let smit_vars env fvs args =
 let emit_make_array oc env fvs = function
   | AppDir(Id.Label "min_caml_make_array", [n; a])
   | AppDir(Id.Label "min_caml_make_float_array", [n; a]) ->
-    let t = if M.mem a !funty_env then
-        (* function array *)
+    let t = if M.mem a !funty_env then (* function array *)
         M.find a !funty_env
       else
         M.find a env
@@ -115,8 +114,7 @@ let emit_make_array oc env fvs = function
        (global.get $R1)\n"
       (smit_var env fvs n)
       (wt_of_t env t)
-      (if M.mem a !funidx_env then
-         (* function array *)
+      (if M.mem a !funidx_env then (* function array *)
          smit "(i32.const %i)" (M.find a !funidx_env)
        else
          smit_var env fvs a)
@@ -236,7 +234,6 @@ let rec g oc env fvs = function
     (* For indirect recursive self-calls,
        no need to actually make the closre (and backup/restore $CL),
        because someone must have done it. *)
-    (* let info = (M.find id !funidx_env) in *)
     emit oc 
       "(call_indirect (type %s)\n\
        ;; bvs\n%s\
