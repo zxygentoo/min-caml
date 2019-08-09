@@ -192,9 +192,7 @@ let rec g oc env fvs = function
     g oc (M.add id Type.Unit env) fvs e2
 
   | Let((id, t), e1, e2) ->
-    emit oc "(local.set $%s " id ;
-    g oc env fvs e1 ;
-    emit oc ")\n" ;
+    emit oc "(local.set $%s " id ; g oc env fvs e1 ; emit oc ")\n" ;
     g oc (M.add id t env) fvs e2
 
   | Var id ->
@@ -236,7 +234,7 @@ let rec g oc env fvs = function
        no need to actually make the closre (and backup/restore $CL),
        because someone must have done it. *)
     emit oc 
-      "(call_indirect %s\n;;bvs\n%s;; fnptr\n%s)\n"
+      "(call_indirect %s\n;; bvs\n%s;; fnptr\n%s)\n"
       (smit_fnty env id)
       (smit_vars env fvs args)
       (smit_fnidx id)
