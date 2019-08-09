@@ -93,8 +93,7 @@ let smit_fnidx id =
 
 
 let smit_fnty env id =
-  let find_in = M.find id in
-  let t = if M.mem id env then find_in env else find_in !funty_env in
+  let t = if M.mem id env then M.find id env else M.find id !funty_env in
   smit "(type %s)" (TM.find t !funtyidx_env)
 
 
