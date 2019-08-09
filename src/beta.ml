@@ -5,6 +5,10 @@ let find x env =
   try M.find x env with Not_found -> x
 
 
+let find_ts xs env =
+  List.map (fun x -> find x env) xs
+
+
 let rec g env = function
   | Unit ->
     Unit
@@ -48,7 +52,7 @@ let rec g env = function
   | Let((x, t), e1, e2) ->
     begin match g env e1 with
       | Var y ->
-        Format.eprintf "beta-reducing %s = %s@." x y;
+        (* beta reduction *)
         g (M.add x y env) e2
 
       | e1' ->
@@ -56,8 +60,8 @@ let rec g env = function
         Let((x, t), e1', e2')
     end
 
-  | LetRec({ name = xt ; args = yts ; body = e1 }, e2) ->
-    LetRec({ name = xt ; args = yts ; body = g env e1 }, g env e2)
+  | LetRec({ name ; args ; body }, e) ->
+    LetRec({ name ; args ; body = g env body }, g env e)
 
   | Var x ->
     Var(find x env)
@@ -75,13 +79,13 @@ let rec g env = function
     Put(find x env, find y env, find z env)
 
   | App(g, xs) ->
-    App(find g env, List.map (fun x -> find x env) xs)
+    App(find g env, find_ts xs env)
 
   | ExtArray x ->
     ExtArray x
 
   | ExtFunApp(x, ys) ->
-    ExtFunApp(x, List.map (fun y -> find y env) ys)
+    ExtFunApp(x, find_ts ys env)
 
 
 let f =

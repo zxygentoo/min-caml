@@ -50,17 +50,9 @@ type prog = Prog of fundef list * t
 
 let toplevel : fundef list ref = ref []
 
-
-let backup_toplevel _ =
-  !toplevel
-
-
-let restore_toplevel v =
-  toplevel := v
-
-
-let add_toplevel_fundef f =
-  toplevel := f :: !toplevel
+let backup_toplevel () = !toplevel
+let restore_toplevel v = toplevel := v
+let add_toplevel_fundef f = toplevel := f :: !toplevel
 
 
 let rec free_vars = function
@@ -93,7 +85,7 @@ let rec free_vars = function
   | Var x ->
     S.singleton x
 
-  | MakeCls((x, _), { entry = _; actual_fv }, e) ->
+  | MakeCls((x, _), { actual_fv ; _ }, e) ->
     S.remove x (S.union (S.of_list actual_fv) (free_vars e))
 
   | AppCls(x, ys) ->
@@ -113,19 +105,26 @@ let args_fv args =
   S.of_list (List.map fst args)
 
 
-(* closure conversion *)
+let make_cls entry fvs =
+  { entry = Id.Label entry ; actual_fv = fvs }
+
+
+let make_fundef id t args formal_fv body =
+  { name = Id.Label id, t ; args ; formal_fv ; body }
+
+
 let rec g env known = function
   | K.Unit ->
     Unit
 
-  | K.Int(i) ->
-    Int(i)
+  | K.Int i ->
+    Int i
 
-  | K.Float(d) ->
-    Float(d)
+  | K.Float d ->
+    Float d
 
-  | K.Neg(x) ->
-    Neg(x)
+  | K.Neg x ->
+    Neg x
 
   | K.Add(x, y) ->
     Add(x, y)
@@ -133,8 +132,8 @@ let rec g env known = function
   | K.Sub(x, y) ->
     Sub(x, y)
 
-  | K.FNeg(x) ->
-    FNeg(x)
+  | K.FNeg x ->
+    FNeg x
 
   | K.FAdd(x, y) ->
     FAdd(x, y)
@@ -157,78 +156,41 @@ let rec g env known = function
   | K.Let((x, t), e1, e2) ->
     Let((x, t), g env known e1, g (M.add x t env) known e2)
 
-  | K.Var(x) ->
-    Var(x)
+  | K.Var x ->
+    Var x
 
-  | K.LetRec({ name = (x, t); args; body }, exp) ->
-    (* backup toplevel so we may rewind it later *)
-    let backup = backup_toplevel ()
-    and env' = M.add x t env in
-
-    let cls_convert_body _ =
-      (* assuming function has no free variables *)
-      let known' = S.add x known in
-      let body' = g (M.add_list args env') known' body in
-      let fvs = S.diff (free_vars body') (args_fv args) in
-      if S.is_empty fvs then
-        begin
-          Format.eprintf
-            "--> function `%s` has no free variables, \
-             can be directly applied@."x ;
-          known', body'
-        end
-      else
-        begin          
-          Format.eprintf
-            "--> function `%s` has free variable(s) %s, \
-             can not be directly applied@." x (Id.pp_list (S.elements fvs)) ;
-          (* restore toplevel from backup *)
-          restore_toplevel backup ;
-          known, g (M.add_list args env') known body
-        end
-    in
-    let known', body' = cls_convert_body () in
-
-    let actual_fv =
-      S.elements (S.diff (free_vars body') (S.add x (args_fv args))) in
-    let formal_fv =
-      List.map (fun fv -> (fv, M.find fv env')) actual_fv in
-    let exp' = g env' known' exp in
-    let is_cls = S.mem x (free_vars exp') in
-
+  | K.LetRec({ name = x, t ; args ; body }, e) ->
+    (* backup toplevel *)
+    let backup = backup_toplevel () in
+    let env' = M.add x t env in
+    let fn_env' = M.add_list args env' in
+    (* assuming function no fvs and convert body *)
+    let known' = S.add x known in
+    let body' = g fn_env' known' body in
+    let no_fvs = S.is_empty (S.diff (free_vars body') (args_fv args)) in
+    (* restore toplevel if actually has fvs *)
+    if not no_fvs then restore_toplevel backup ;
+    (* real known and body *)
+    let known, body = if no_fvs
+      then known', body'
+      else known, g fn_env' known body in
+    let fvs = S.elements (S.diff (free_vars body) (S.add x (args_fv args))) in
+    let fvts = List.map (fun fv -> (fv, M.find fv env')) fvs in
     (* add toplevel fundef *)
-    add_toplevel_fundef
-      {
-        name = (Id.Label(x), t);
-        args;
-        formal_fv;
-        body = body'
-      } ;
-
-    (* make or eliminate closure *)
-    let cls_convert_exp e =
-      if is_cls then
-        begin
-          Format.eprintf "--> making closure `%s`@." x ;
-          MakeCls((x, t), { entry = Id.Label(x); actual_fv }, e)
-        end
-      else
-        begin
-          Format.eprintf "--> eliminating closure `%s`@." x ;
-          e
-        end
-    in
-    cls_convert_exp exp'
+    add_toplevel_fundef (make_fundef x t args fvts body) ;
+    (* make closure if needed *)
+    let e' = g env' known e in
+    let is_cls = S.mem x (free_vars e') in
+    if is_cls then MakeCls((x, t), make_cls x fvs, e') else e'
 
   | K.App(x, ys) when S.mem x known ->
-    Format.eprintf "--> directly applying %s@." x ;
     AppDir(Id.Label(x), ys)
 
   | K.App(f, xs) ->
     AppCls(f, xs)
 
-  | K.Tuple(xs) ->
-    Tuple(xs)
+  | K.Tuple xs ->
+    Tuple xs
 
   | K.LetTuple(xts, y, e) ->
     LetTuple(xts, y, g (M.add_list xts env) known e)
@@ -239,8 +201,8 @@ let rec g env known = function
   | K.Put(x, y, z) ->
     Put(x, y, z)
 
-  | K.ExtArray(x) ->
-    ExtArray(Id.Label(x))
+  | K.ExtArray x ->
+    ExtArray(Id.Label x)
 
   | K.ExtFunApp(x, ys) ->
     AppDir(Id.Label("min_caml_" ^ x), ys)

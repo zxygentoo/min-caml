@@ -61,13 +61,11 @@ let rec wt_of_t env = function
   | Type.Var { contents = None } -> failwith "wt_of_t"
 
 
-(* inc HP shortcut *)
+(* emit shortcuts *)
 
 let smit_inc_hp i =
   smit "(global.set $HP (i32.add (i32.const %i) (global.get $HP)))\n" i
 
-
-(* emit var *)
 
 let smit_var env fvs id =
   if M.mem id fvs then
@@ -90,36 +88,37 @@ let smit_vars env fvs args =
   Id.pp_list (List.map (smit_var env fvs) args)
 
 
+let smit_fnidx id =
+  smit "(i32.const %i)" (M.find id !funidx_env)
+
+
+let smit_fnty env id =
+  let find_in = M.find id in
+  let t = if M.mem id env then find_in env else find_in !funty_env in
+  smit "(type %s)" (TM.find t !funtyidx_env)
+
+
 (* Currently NodeJS doesn't support WebAssembly.Global API,
    so these array making functions will be quite annoying to write as
    JavaScript externals, for now we just do it in WebAssembly. *)
 let emit_make_array oc env fvs = function
   | AppDir(Id.Label "min_caml_make_array", [n; a])
   | AppDir(Id.Label "min_caml_make_float_array", [n; a]) ->
-    let t = if M.mem a !funty_env then
+    let t, sfnidx = if M.mem a !funty_env then
         (* function array *)
-        M.find a !funty_env
+        M.find a !funty_env, smit_fnidx a
       else
-        M.find a env
+        M.find a env, smit_var env fvs a
     in
     emit oc
-      "(global.set $GA (i32.const 0))\n\
-       (global.set $GB (global.get $HP))\n\
-       (block\n\
-       (loop\n\
-       (br_if 1 (i32.eq (global.get $GA) %s))\n\
-       (%s.store\n(global.get $HP) %s)\n\
-       %s
+      "(global.set $GA (i32.const 0))\n(global.set $GB (global.get $HP))\n\
+       (block\n(loop\n(br_if 1 (i32.eq (global.get $GA) %s))\n\
+       (%s.store\n(global.get $HP) %s)\n%s
        (global.set $GA (i32.add (global.get $GA) (i32.const 1)))\n\
-       (br 0)))\n\
-       (global.get $GB)\n"
+       (br 0)))\n(global.get $GB)\n"
       (smit_var env fvs n)
       (wt_of_t env t)
-      (if M.mem a !funidx_env then
-         (* function array *)
-         smit "(i32.const %i)" (M.find a !funidx_env)
-       else
-         smit_var env fvs a)
+      sfnidx
       (smit_inc_hp (size_of_t t))
 
   | _ ->
@@ -201,7 +200,7 @@ let rec g oc env fvs = function
   | Var id ->
     emit oc "%s" (smit_var env fvs id)
 
-  | MakeCls((id, t), { entry = Id.Label fname ; actual_fv }, e) ->
+  | MakeCls((id, t), { entry = Id.Label entry_id ; actual_fv }, e) ->
     let ts = List.map (fun x -> M.find x env) actual_fv in
     let ss = List.map size_of_t ts in
     let os = fold_sums (fun x -> x) ss in
@@ -209,9 +208,9 @@ let rec g oc env fvs = function
     emit oc
       ";; get HP\n(local.set $%s (global.get $HP))\n\
        ;; malloc\n%s\
-       ;; store fnptr\n(i32.store (local.get $%s) (i32.const %i))\n\
+       ;; store fnptr\n(i32.store (local.get $%s) %s)\n\
        ;; fvs\n"
-      id (smit_inc_hp total_size) id (M.find fname !funidx_env) ;
+      id (smit_inc_hp total_size) id (smit_fnidx entry_id) ;
     List.iter2
       (fun fv o ->
          emit oc "(i32.store (i32.add (i32.const %i) (local.get $%s)) %s)\n"
@@ -224,26 +223,23 @@ let rec g oc env fvs = function
     emit oc
       ";; backup CL\n(local.set $$cl_bak (global.get $CL))\n\
        ;; register cls to CL\n(global.set $CL %s)\n\
-       (call_indirect (type %s)\n\
+       (call_indirect %s\n\
        ;; bvs\n%s\n\
        ;; fnptr\n(i32.load (global.get $CL)))\n\
        ;; restore CL\n(global.set $CL (local.get $$cl_bak))\n"
       (smit_var env fvs id)
-      (TM.find (M.find id env) !funtyidx_env)
+      (smit_fnty env id)
       (smit_vars env fvs args)
 
   | AppCls(id, args) ->
     (* For indirect recursive self-calls,
        no need to actually make the closre (and backup/restore $CL),
        because someone must have done it. *)
-    (* let info = (M.find id !funidx_env) in *)
     emit oc 
-      "(call_indirect (type %s)\n\
-       ;; bvs\n%s\
-       ;; fnptr\n(i32.const %i))\n"
-      (TM.find (M.find id !funty_env) !funtyidx_env)
+      "(call_indirect %s\n;;bvs\n%s;; fnptr\n%s)\n"
+      (smit_fnty env id)
       (smit_vars env fvs args)
-      (M.find id !funidx_env)
+      (smit_fnidx id)
 
   | AppDir(Id.Label "min_caml_make_array", [_; a])
     when M.mem a env && M.find a env = Type.Unit ->
@@ -441,18 +437,16 @@ let emit_func oc = function
     let fvindex formal_fv =
       let _, ts = sep_pairs formal_fv in
       let os = fold_sums size_of_t ts in
-      (List.map2 (fun (id, t) o -> id, (t, o)) formal_fv os)
+      List.map2 (fun (id, t) o -> id, (t, o)) formal_fv os
     in
     emit oc "(func $%s" n ;
     List.iter (emit_label_param oc) args ;
     emit_result oc t ;
     emit oc "\n" ;
     emit_locals oc body ;
-    (
-      let env = M.add_list (args @ formal_fv) M.empty in
-      let fvs = M.add_list (fvindex formal_fv) M.empty in
-      g oc env fvs body
-    ) ;
+    let env = M.add_list (args @ formal_fv) M.empty in
+    let fvs = M.add_list (fvindex formal_fv) M.empty in
+    g oc env fvs body ;
     emit oc ")\n;; end of func %s\n\n" n
 
   | _ ->
@@ -483,13 +477,13 @@ let build_funtyidx_env fundefs =
 
 let build_funidx_env fundefs =
   M.add_list
-    (List.mapi (fun i { name = (Id.Label n, _) ; _ } -> n, i) fundefs)
+    (List.mapi (fun i { name = Id.Label n, _ ; _ } -> n, i) fundefs)
     M.empty
 
 
 let build_funty_env fundefs =
   M.add_list
-    (List.map (fun { name = (Id.Label n, t) ; _ } -> n, t) fundefs)
+    (List.map (fun { name = Id.Label n, t ; _ } -> n, t) fundefs)
     M.empty
 
 

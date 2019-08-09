@@ -5,7 +5,8 @@ type label = Label of string
 [@@deriving show]
 
 
-let compare = Pervasives.compare
+let compare =
+  Pervasives.compare
 
 
 let rec pp_list_sep sep = function
@@ -22,7 +23,7 @@ let counter = ref 0
 
 
 let genid s =
-  incr counter;
+  incr counter ;
   Printf.sprintf "%s.%d" s !counter
 
 
@@ -38,5 +39,5 @@ let id_of_typ = function
 
 
 let gentmp typ =
-  incr counter;
+  incr counter ;
   Printf.sprintf "T%s.%d" (id_of_typ typ) !counter
