@@ -229,9 +229,7 @@ let rec g oc env fvs = function
       (smit_vars env fvs args)
 
   | AppCls(id, args) ->
-    (* For indirect recursive self-calls,
-       no need to actually make the closre (and backup/restore $CL),
-       because someone must have done it. *)
+    (* indirect recursive self-calls *)
     emit oc 
       "(call_indirect %s\n;; bvs\n%s;; fnptr\n%s)\n"
       (smit_fnty env id)
@@ -414,18 +412,19 @@ let emit_table oc fds =
     (Id.pp_list (List.map (fun { name = Id.Label n, _ ; _ } -> "$" ^ n) fds))
 
 
-let emit_types oc sigs =
-  List.iter
-    (function
-      | Type.Fun(args, ret_t), idx ->
-        emit oc "(type %s (func" idx ;
-        List.iter (emit_param oc) args ;
-        emit_result oc ret_t ;
-        emit oc "))\n"
+let emit_type oc = function
+  | Type.Fun(args, ret_t), idx ->
+    emit oc "(type %s (func" idx ;
+    List.iter (emit_param oc) args ;
+    emit_result oc ret_t ;
+    emit oc "))\n"
 
-      | _ ->
-        failwith "emit_types")
-    (TM.bindings sigs) ;
+  | _ ->
+    failwith "emit_types"
+
+
+let emit_types oc sigs =
+  List.iter (emit_type oc) (TM.bindings sigs) ;
   emit oc "\n"
 
 
